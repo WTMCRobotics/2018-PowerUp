@@ -13,10 +13,10 @@
 #include <SmartDashboard/SmartDashboard.h>
 #include <TimedRobot.h>
 #include <ctre/Phoenix.h>
-#include <XboxController.h>
+#include <Joystick.h>
 #include <AHRS.h>
 
-class Robot : public frc::TimedRobot {
+class Robot: public frc::TimedRobot {
 public:
 	void RobotInit() {
 		m_chooser.AddDefault(kAutoNameDefault, kAutoNameDefault);
@@ -43,12 +43,9 @@ public:
 	void AutonomousInit() override {
 		colorSides = frc::DriverStation::GetInstance().GetGameSpecificMessage();
 		std::cout << colorSides[0];
-		if(colorSides[0] == 'L')
-		{
+		if (colorSides[0] == 'L') {
 
-		}
-		else
-		{
+		} else {
 
 		}
 
@@ -74,29 +71,33 @@ public:
 
 	void TeleopInit() {}
 
-	void TeleopPeriodic()
-	{
+	void TeleopPeriodic() {
 		//UpdateJoystick();
 		//Drive();
 		//UpdateDashboard();
 	}
 
-	void TestPeriodic() {}
-
-	void UpdateJoystick()
-	{
-		leftStick = xboxController.GetY(frc::GenericHID::JoystickHand::kLeftHand);
+	void TestPeriodic() {
 	}
 
-	void Drive()
-	{
+	void UpdateJoystick() {
+		leftJoyY = leftJoystick.GetY();
+		rightJoyY = rightJoystick.GetY();
+	}
+
+	void Drive() {
 		// 1500 RPM * 4096 units/rev (resolution * 4) / 600 100ms/min in either direction: velocity control is units/100ms
-		targetSpeed = Deadband(leftStick) * 1500.0 * 4096 / 600;
-		leftMaster.Set(ctre::phoenix::motorcontrol::ControlMode::Velocity, targetSpeed);
+		//Left motor move
+		leftTargetSpeed = Deadband(leftJoyY) * 1500.0 * 4096 / 600;
+		leftMaster.Set(ctre::phoenix::motorcontrol::ControlMode::Velocity, leftTargetSpeed);
+
+		//Right motor move
+		rightTargetSpeed = Deadband(leftJoyY) * 1500.0 * 4096 / 600;
+		rightMaster.Set(ctre::phoenix::motorcontrol::ControlMode::Velocity, leftTargetSpeed);
 	}
 
-	void SetupMotor()
-	{
+	void SetupMotor() {
+		//Left motor setup
 		leftMaster.ConfigSelectedFeedbackSensor(ctre::phoenix::motorcontrol::FeedbackDevice::QuadEncoder, 0, 0);
 		leftMaster.SetSensorPhase(true);
 		leftMaster.ConfigNominalOutputForward(0, 0);
@@ -104,29 +105,36 @@ public:
 		leftMaster.ConfigPeakOutputForward(1, 0);
 		leftMaster.ConfigPeakOutputReverse(-1, 0);
 		leftMaster.SetNeutralMode(ctre::phoenix::motorcontrol::NeutralMode::Brake);
+		leftSlave.Set(ctre::phoenix::motorcontrol::ControlMode::Follower, 1);
+
+		//Right motor setup
+		rightMaster.ConfigSelectedFeedbackSensor(ctre::phoenix::motorcontrol::FeedbackDevice::QuadEncoder, 0, 0);
+		rightMaster.SetSensorPhase(true);
+		rightMaster.ConfigNominalOutputForward(0, 0);
+		rightMaster.ConfigNominalOutputReverse(0, 0);
+		rightMaster.ConfigPeakOutputForward(1, 0);
+		rightMaster.ConfigPeakOutputReverse(-1, 0);
+		rightMaster.SetNeutralMode(ctre::phoenix::motorcontrol::NeutralMode::Brake);
+		rightSlave.Set(ctre::phoenix::motorcontrol::ControlMode::Follower, 4);
 	}
 
-	void UpdateDashboard()
-	{
+	void UpdateDashboard() {
 		frc::SmartDashboard::PutNumber("Encoder Position", leftMaster.GetSelectedSensorPosition(0));
 		frc::SmartDashboard::PutNumber("Error", leftMaster.GetClosedLoopError(0));
 		frc::SmartDashboard::PutNumber("Target", leftMaster.GetClosedLoopTarget(0));
 		frc::SmartDashboard::PutNumber("Angle", getGyro());
 	}
 
-	double getGyro()
-	{
+	double getGyro() {
 		return gyro.GetYaw();
 	}
 
-	double Deadband(double value)
-	{
-		if(value <= .15 && value >= -.15)
+	double Deadband(double value) {
+		if (value <= .15 && value >= -.15)
 			return 0;
 		else
 			return value;
 	}
-
 
 private:
 	frc::LiveWindow& m_lw = *LiveWindow::GetInstance();
@@ -134,14 +142,17 @@ private:
 	const std::string kAutoNameDefault = "Default";
 	const std::string kAutoNameCustom = "My Auto";
 	std::string m_autoSelected;
-	TalonSRX leftMaster{1};
-	TalonSRX leftSlave{2};
-	TalonSRX rightMaster{4};
-	TalonSRX rightSlave{3};
-	XboxController xboxController{0};
-	double leftStick;
-	double targetSpeed;
-	AHRS gyro{SerialPort::kMXP};
+	TalonSRX leftMaster { 1 };
+	TalonSRX leftSlave { 2 };
+	TalonSRX rightMaster { 4 };
+	TalonSRX rightSlave { 3 };
+	Joystick rightJoystick { 0 };
+	Joystick leftJoystick { 1 };
+	double leftJoyY;
+	double rightJoyY;
+	double leftTargetSpeed;
+	double rightTargetSpeed;
+	AHRS gyro { SerialPort::kMXP };
 
 	std::string colorSides;
 };
