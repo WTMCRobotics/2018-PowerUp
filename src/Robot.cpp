@@ -92,25 +92,25 @@ public:
 	{
 		// 1500 RPM * 4096 units/rev (resolution * 4) / 600 100ms/min in either direction: velocity control is units/100ms
 		targetSpeed = Deadband(leftStick) * 1500.0 * 4096 / 600;
-		motor.Set(ctre::phoenix::motorcontrol::ControlMode::Velocity, targetSpeed);
+		leftMaster.Set(ctre::phoenix::motorcontrol::ControlMode::Velocity, targetSpeed);
 	}
 
 	void SetupMotor()
 	{
-		motor.ConfigSelectedFeedbackSensor(ctre::phoenix::motorcontrol::FeedbackDevice::QuadEncoder, 0, 0);
-		motor.SetSensorPhase(true);
-		motor.ConfigNominalOutputForward(0, 0);
-		motor.ConfigNominalOutputReverse(0, 0);
-		motor.ConfigPeakOutputForward(1, 0);
-		motor.ConfigPeakOutputReverse(-1, 0);
-		motor.SetNeutralMode(ctre::phoenix::motorcontrol::NeutralMode::Brake);
+		leftMaster.ConfigSelectedFeedbackSensor(ctre::phoenix::motorcontrol::FeedbackDevice::QuadEncoder, 0, 0);
+		leftMaster.SetSensorPhase(true);
+		leftMaster.ConfigNominalOutputForward(0, 0);
+		leftMaster.ConfigNominalOutputReverse(0, 0);
+		leftMaster.ConfigPeakOutputForward(1, 0);
+		leftMaster.ConfigPeakOutputReverse(-1, 0);
+		leftMaster.SetNeutralMode(ctre::phoenix::motorcontrol::NeutralMode::Brake);
 	}
 
 	void UpdateDashboard()
 	{
-		frc::SmartDashboard::PutNumber("Encoder Position", motor.GetSelectedSensorPosition(0));
-		frc::SmartDashboard::PutNumber("Error", motor.GetClosedLoopError(0));
-		frc::SmartDashboard::PutNumber("Target", motor.GetClosedLoopTarget(0));
+		frc::SmartDashboard::PutNumber("Encoder Position", leftMaster.GetSelectedSensorPosition(0));
+		frc::SmartDashboard::PutNumber("Error", leftMaster.GetClosedLoopError(0));
+		frc::SmartDashboard::PutNumber("Target", leftMaster.GetClosedLoopTarget(0));
 		frc::SmartDashboard::PutNumber("Angle", getGyro());
 	}
 
@@ -134,7 +134,10 @@ private:
 	const std::string kAutoNameDefault = "Default";
 	const std::string kAutoNameCustom = "My Auto";
 	std::string m_autoSelected;
-	TalonSRX motor{1};
+	TalonSRX leftMaster{1};
+	TalonSRX leftSlave{2};
+	TalonSRX rightMaster{4};
+	TalonSRX rightSlave{3};
 	XboxController xboxController{0};
 	double leftStick;
 	double targetSpeed;
