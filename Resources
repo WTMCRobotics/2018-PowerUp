@@ -1,0 +1,9 @@
+WPILib Install for Eclipse: http://first.wpi.edu/FRC/roborio/release/eclipse
+Documentation: http://first.wpi.edu/FRC/roborio/release/docs/cpp/
+
+NavX-MXP Library: https://www.kauailabs.com/navx-mxp/
+NavX-MXP Documentation: http://first.wpi.edu/FRC/roborio/release/docs/cpp/
+
+CTRE TalonSRX Library: http://www.ctr-electronics.com/talon-srx.html#product_tabs_technical_resources
+CTRE TalonSRX Documentation: http://www.ctr-electronics.com/downloads/api/cpp/html/index.html
+CTRE TalonSRX Examples: https://github.com/CrossTheRoadElec/Phoenix-Examples-Languages/tree/master/C%2B%2B
