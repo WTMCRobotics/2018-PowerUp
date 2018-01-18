@@ -89,39 +89,39 @@ public:
 		// 1500 RPM * 4096 units/rev (resolution * 4) / 600 100ms/min in either direction: velocity control is units/100ms
 		//Left motor move
 		leftTargetSpeed = Deadband(leftJoyY) * 1500.0 * 4096 / 600;
-		leftMaster.Set(ctre::phoenix::motorcontrol::ControlMode::Velocity, leftTargetSpeed);
+		leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::Velocity, leftTargetSpeed);
 
 		//Right motor move
 		rightTargetSpeed = Deadband(leftJoyY) * 1500.0 * 4096 / 600;
-		rightMaster.Set(ctre::phoenix::motorcontrol::ControlMode::Velocity, leftTargetSpeed);
+		rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::Velocity, leftTargetSpeed);
 	}
 
 	void SetupMotor() {
 		//Left motor setup
-		leftMaster.ConfigSelectedFeedbackSensor(ctre::phoenix::motorcontrol::FeedbackDevice::QuadEncoder, 0, 0);
-		leftMaster.SetSensorPhase(true);
-		leftMaster.ConfigNominalOutputForward(0, 0);
-		leftMaster.ConfigNominalOutputReverse(0, 0);
-		leftMaster.ConfigPeakOutputForward(1, 0);
-		leftMaster.ConfigPeakOutputReverse(-1, 0);
-		leftMaster.SetNeutralMode(ctre::phoenix::motorcontrol::NeutralMode::Brake);
-		leftSlave.Set(ctre::phoenix::motorcontrol::ControlMode::Follower, 1);
+		leftLeader.ConfigSelectedFeedbackSensor(ctre::phoenix::motorcontrol::FeedbackDevice::QuadEncoder, 0, 0);
+		leftLeader.SetSensorPhase(true);
+		leftLeader.ConfigNominalOutputForward(0, 0);
+		leftLeader.ConfigNominalOutputReverse(0, 0);
+		leftLeader.ConfigPeakOutputForward(1, 0);
+		leftLeader.ConfigPeakOutputReverse(-1, 0);
+		leftLeader.SetNeutralMode(ctre::phoenix::motorcontrol::NeutralMode::Brake);
+		leftFollower.Set(ctre::phoenix::motorcontrol::ControlMode::Follower, 1);
 
 		//Right motor setup
-		rightMaster.ConfigSelectedFeedbackSensor(ctre::phoenix::motorcontrol::FeedbackDevice::QuadEncoder, 0, 0);
-		rightMaster.SetSensorPhase(true);
-		rightMaster.ConfigNominalOutputForward(0, 0);
-		rightMaster.ConfigNominalOutputReverse(0, 0);
-		rightMaster.ConfigPeakOutputForward(1, 0);
-		rightMaster.ConfigPeakOutputReverse(-1, 0);
-		rightMaster.SetNeutralMode(ctre::phoenix::motorcontrol::NeutralMode::Brake);
-		rightSlave.Set(ctre::phoenix::motorcontrol::ControlMode::Follower, 4);
+		rightLeader.ConfigSelectedFeedbackSensor(ctre::phoenix::motorcontrol::FeedbackDevice::QuadEncoder, 0, 0);
+		rightLeader.SetSensorPhase(true);
+		rightLeader.ConfigNominalOutputForward(0, 0);
+		rightLeader.ConfigNominalOutputReverse(0, 0);
+		rightLeader.ConfigPeakOutputForward(1, 0);
+		rightLeader.ConfigPeakOutputReverse(-1, 0);
+		rightLeader.SetNeutralMode(ctre::phoenix::motorcontrol::NeutralMode::Brake);
+		rightFollower.Set(ctre::phoenix::motorcontrol::ControlMode::Follower, 4);
 	}
 
 	void UpdateDashboard() {
-		frc::SmartDashboard::PutNumber("Encoder Position", leftMaster.GetSelectedSensorPosition(0));
-		frc::SmartDashboard::PutNumber("Error", leftMaster.GetClosedLoopError(0));
-		frc::SmartDashboard::PutNumber("Target", leftMaster.GetClosedLoopTarget(0));
+		frc::SmartDashboard::PutNumber("Encoder Position", leftLeader.GetSelectedSensorPosition(0));
+		frc::SmartDashboard::PutNumber("Error", leftLeader.GetClosedLoopError(0));
+		frc::SmartDashboard::PutNumber("Target", leftLeader.GetClosedLoopTarget(0));
 		frc::SmartDashboard::PutNumber("Angle", getGyro());
 	}
 
@@ -142,10 +142,10 @@ private:
 	const std::string kAutoNameDefault = "Default";
 	const std::string kAutoNameCustom = "My Auto";
 	std::string m_autoSelected;
-	TalonSRX leftMaster { 1 };
-	TalonSRX leftSlave { 2 };
-	TalonSRX rightMaster { 4 };
-	TalonSRX rightSlave { 3 };
+	TalonSRX leftLeader { 1 };
+	TalonSRX leftFollower { 2 };
+	TalonSRX rightLeader { 4 };
+	TalonSRX rightFollower { 3 };
 	Joystick rightJoystick { 0 };
 	Joystick leftJoystick { 1 };
 	double leftJoyY;
