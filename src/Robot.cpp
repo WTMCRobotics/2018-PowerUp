@@ -23,6 +23,11 @@ public:
 		m_chooser.AddObject(kAutoNameCustom, kAutoNameCustom);
 		frc::SmartDashboard::PutData("Auto Modes", &m_chooser);
 
+		leftLeader.SetSelectedSensorPosition(0, pidChannel, 0);
+		rightLeader.SetSelectedSensorPosition(0, pidChannel, 0);
+
+
+
 		gyro.Reset();
 		gyro.ZeroYaw();
 	}
@@ -74,7 +79,7 @@ public:
 	void TeleopPeriodic() {
 		//UpdateJoystick();
 		//Drive();
-		//UpdateDashboard();
+		UpdateDashboard();
 	}
 
 	void TestPeriodic() {
@@ -108,7 +113,7 @@ public:
 		leftFollower.Set(ctre::phoenix::motorcontrol::ControlMode::Follower, 1);
 
 		//Right motor setup
-		rightLeader.ConfigSelectedFeedbackSensor(ctre::phoenix::motorcontrol::FeedbackDevice::QuadEncoder, 0, 0);
+		rightLeader.ConfigSelectedFeedbackSensor(ctre::phoenix::motorcontrol::FeedbackDevice::QuadEncoder, pidChannel, 0);
 		rightLeader.SetSensorPhase(true);
 		rightLeader.ConfigNominalOutputForward(0, 0);
 		rightLeader.ConfigNominalOutputReverse(0, 0);
@@ -119,9 +124,13 @@ public:
 	}
 
 	void UpdateDashboard() {
-		frc::SmartDashboard::PutNumber("Encoder Position", leftLeader.GetSelectedSensorPosition(0));
-		frc::SmartDashboard::PutNumber("Error", leftLeader.GetClosedLoopError(0));
-		frc::SmartDashboard::PutNumber("Target", leftLeader.GetClosedLoopTarget(0));
+		frc::SmartDashboard::PutNumber("Left Encoder Position", leftLeader.GetSelectedSensorPosition(pidChannel));
+		frc::SmartDashboard::PutNumber("Left Error", leftLeader.GetClosedLoopError(pidChannel));
+		frc::SmartDashboard::PutNumber("Left Target", leftLeader.GetClosedLoopTarget(pidChannel));
+
+		frc::SmartDashboard::PutNumber("Right Encoder Position", rightLeader.GetSelectedSensorPosition(pidChannel));
+		frc::SmartDashboard::PutNumber("Right Error", rightLeader.GetClosedLoopError(pidChannel));
+		frc::SmartDashboard::PutNumber("Right Target", rightLeader.GetClosedLoopTarget(pidChannel));
 		frc::SmartDashboard::PutNumber("Angle", getGyro());
 	}
 
@@ -152,6 +161,7 @@ private:
 	double rightJoyY;
 	double leftTargetSpeed;
 	double rightTargetSpeed;
+	int pidChannel = 0;
 	AHRS gyro { SerialPort::kMXP };
 
 	std::string colorSides;
