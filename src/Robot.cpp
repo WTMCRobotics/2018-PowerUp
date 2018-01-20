@@ -15,21 +15,22 @@
 #include <ctre/Phoenix.h>
 #include <Joystick.h>
 #include <AHRS.h>
+#include "Constant.h"
 
 class Robot: public frc::TimedRobot {
 public:
 	void RobotInit() {
 		m_chooser.AddDefault(kAutoNameDefault, kAutoNameDefault);
-		m_chooser.AddObject(kAutoNameCustom, kAutoNameCustom);
+		m_chooser.AddObject(autoForwardTest, autoForwardTest);
 		frc::SmartDashboard::PutData("Auto Modes", &m_chooser);
 
-		leftLeader.SetSelectedSensorPosition(0, pidChannel, 0);
-		rightLeader.SetSelectedSensorPosition(0, pidChannel, 0);
-
+		leftLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
+		rightLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
 
 
 		gyro.Reset();
 		gyro.ZeroYaw();
+		UpdateDashboard();
 	}
 
 	/*
@@ -59,26 +60,43 @@ public:
 		//		 kAutoNameDefault);
 		std::cout << "Auto selected: " << m_autoSelected << std::endl;
 
-		if (m_autoSelected == kAutoNameCustom) {
+		if (m_autoSelected == autoForwardTest) {
 			// Custom Auto goes here
 		} else {
 			// Default Auto goes here
 		}
+
+		leftLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
+		rightLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
+
+
+		gyro.Reset();
+		gyro.ZeroYaw();
+		UpdateDashboard();
 	}
 
 	void AutonomousPeriodic() {
-		if (m_autoSelected == kAutoNameCustom) {
-			// Custom Auto goes here
+		if (m_autoSelected == autoForwardTest) {
+			DriveDistance(36);
+			UpdateDashboard();
 		} else {
 			// Default Auto goes here
 		}
 	}
 
-	void TeleopInit() {}
+	void TeleopInit() {
+
+		leftLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
+		rightLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
+
+		gyro.Reset();
+		gyro.ZeroYaw();
+		UpdateDashboard();
+	}
 
 	void TeleopPeriodic() {
-		//UpdateJoystick();
-		//Drive();
+		UpdateJoystick();
+		Drive();
 		UpdateDashboard();
 	}
 
@@ -91,14 +109,23 @@ public:
 	}
 
 	void Drive() {
-		// 1500 RPM * 4096 units/rev (resolution * 4) / 600 100ms/min in either direction: velocity control is units/100ms
-		//Left motor move
-		leftTargetSpeed = Deadband(leftJoyY) * 1500.0 * 4096 / 600;
-		leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::Velocity, leftTargetSpeed);
+		//Left motor move, negative value = forward
+		leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, -Deadband(leftJoyY));
 
 		//Right motor move
-		rightTargetSpeed = Deadband(leftJoyY) * 1500.0 * 4096 / 600;
-		rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::Velocity, leftTargetSpeed);
+		rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, Deadband(rightJoyY));
+	}
+
+	void DriveDistance(double inches)
+	{
+		// inches / circumference = number of rotations
+		// * pulsesPerRotationQuad = number of pulses in one rotation
+		// targetEncPos = position encoder should read
+		targetEncPos = (inches / Constant::circumference) * Constant::pulsesPerRotationQuad;
+		// Forward = positive encoder position for left
+		leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::Position, targetEncPos);
+		// Forward = negative encoder position for right
+		rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::Position, -targetEncPos);
 	}
 
 	void SetupMotor() {
@@ -110,10 +137,18 @@ public:
 		leftLeader.ConfigPeakOutputForward(1, 0);
 		leftLeader.ConfigPeakOutputReverse(-1, 0);
 		leftLeader.SetNeutralMode(ctre::phoenix::motorcontrol::NeutralMode::Brake);
+
+		// Set Left PID
+		// P = (percent output * max motor output) / error
+		//		50% output when error is 1 rotation away (pulsesPerRotationQuad = encoder counts for 1 rotation)
+		//		1023 = max motor output (units for motor output are a scalar from -1023 to +1023)
+		leftLeader.Config_kP(Constant::pidChannel, (0.25 * 1023) / Constant::pulsesPerRotationQuad, 0);
+		rightLeader.Config_kP(Constant::pidChannel, (0.25 * 1023) / Constant::pulsesPerRotationQuad, 0);
+
 		leftFollower.Set(ctre::phoenix::motorcontrol::ControlMode::Follower, 1);
 
 		//Right motor setup
-		rightLeader.ConfigSelectedFeedbackSensor(ctre::phoenix::motorcontrol::FeedbackDevice::QuadEncoder, pidChannel, 0);
+		rightLeader.ConfigSelectedFeedbackSensor(ctre::phoenix::motorcontrol::FeedbackDevice::QuadEncoder, Constant::pidChannel, 0);
 		rightLeader.SetSensorPhase(true);
 		rightLeader.ConfigNominalOutputForward(0, 0);
 		rightLeader.ConfigNominalOutputReverse(0, 0);
@@ -124,14 +159,19 @@ public:
 	}
 
 	void UpdateDashboard() {
-		frc::SmartDashboard::PutNumber("Left Encoder Position", leftLeader.GetSelectedSensorPosition(pidChannel));
-		frc::SmartDashboard::PutNumber("Left Error", leftLeader.GetClosedLoopError(pidChannel));
-		frc::SmartDashboard::PutNumber("Left Target", leftLeader.GetClosedLoopTarget(pidChannel));
+		frc::SmartDashboard::PutNumber("Left Enc Pos", leftLeader.GetSelectedSensorPosition(Constant::Constant::pidChannel));
+		frc::SmartDashboard::PutNumber("Left Error", leftLeader.GetClosedLoopError(Constant::pidChannel));
+		frc::SmartDashboard::PutNumber("Left Target", leftLeader.GetClosedLoopTarget(Constant::pidChannel));
 
-		frc::SmartDashboard::PutNumber("Right Encoder Position", rightLeader.GetSelectedSensorPosition(pidChannel));
-		frc::SmartDashboard::PutNumber("Right Error", rightLeader.GetClosedLoopError(pidChannel));
-		frc::SmartDashboard::PutNumber("Right Target", rightLeader.GetClosedLoopTarget(pidChannel));
+		frc::SmartDashboard::PutNumber("Right Enc Pos", rightLeader.GetSelectedSensorPosition(Constant::pidChannel));
+		frc::SmartDashboard::PutNumber("Right Error", rightLeader.GetClosedLoopError(Constant::pidChannel));
+		frc::SmartDashboard::PutNumber("Right Target", rightLeader.GetClosedLoopTarget(Constant::pidChannel));
 		frc::SmartDashboard::PutNumber("Angle", getGyro());
+
+		frc::SmartDashboard::PutNumber("Left % Output", leftLeader.GetMotorOutputPercent());
+		frc::SmartDashboard::PutNumber("Left Joystick", leftJoyY);
+		frc::SmartDashboard::PutNumber("Right %  Output", rightLeader.GetMotorOutputPercent());
+		frc::SmartDashboard::PutNumber("Right Joystick", rightJoyY);
 	}
 
 	double getGyro() {
@@ -149,19 +189,17 @@ private:
 	frc::LiveWindow& m_lw = *LiveWindow::GetInstance();
 	frc::SendableChooser<std::string> m_chooser;
 	const std::string kAutoNameDefault = "Default";
-	const std::string kAutoNameCustom = "My Auto";
+	const std::string autoForwardTest = "Forward Test";
 	std::string m_autoSelected;
-	TalonSRX leftLeader { 1 };
-	TalonSRX leftFollower { 2 };
-	TalonSRX rightLeader { 4 };
-	TalonSRX rightFollower { 3 };
+	TalonSRX leftLeader { Constant::LeftLeaderID };
+	TalonSRX leftFollower { Constant::LeftFollowerID };
+	TalonSRX rightLeader { Constant::RightLeaderID };
+	TalonSRX rightFollower { Constant::RightFollowerID };
 	Joystick rightJoystick { 0 };
 	Joystick leftJoystick { 1 };
 	double leftJoyY;
 	double rightJoyY;
-	double leftTargetSpeed;
-	double rightTargetSpeed;
-	int pidChannel = 0;
+	double targetEncPos;
 	AHRS gyro { SerialPort::kMXP };
 
 	std::string colorSides;
