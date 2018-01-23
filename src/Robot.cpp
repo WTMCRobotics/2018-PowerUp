@@ -143,8 +143,15 @@ public:
 		// P = (percent output * max motor output) / error
 		//		50% output when error is 1 rotation away (pulsesPerRotationQuad = encoder counts for 1 rotation)
 		//		1023 = max motor output (units for motor output are a scalar from -1023 to +1023)
-		leftLeader.Config_kP(Constant::pidChannel, (0.5 * 1023) / Constant::pulsesPerRotationQuad, 0);
-		rightLeader.Config_kP(Constant::pidChannel, (0.5 * 1023) / Constant::pulsesPerRotationQuad, 0);
+		leftLeader.Config_kP(Constant::pidChannel, (0.75 * 1023) / Constant::pulsesPerRotationQuad, 0);
+		leftLeader.Config_kF(Constant::pidChannel, 0.0, 0);
+		leftLeader.Config_kI(Constant::pidChannel, 0.0, 0);
+		leftLeader.Config_kD(Constant::pidChannel, 0.0, 0);
+
+		rightLeader.Config_kP(Constant::pidChannel, (0.75 * 1023) / Constant::pulsesPerRotationQuad, 0);
+		rightLeader.Config_kF(Constant::pidChannel, 0.0, 0);
+		rightLeader.Config_kI(Constant::pidChannel, 0.0, 0);
+		rightLeader.Config_kD(Constant::pidChannel, 0.0, 0);
 
 		leftFollower.Set(ctre::phoenix::motorcontrol::ControlMode::Follower, 1);
 
@@ -160,6 +167,9 @@ public:
 	}
 
 	void UpdateDashboard() {
+		frc::SmartDashboard::PutNumber("Target Enc Pos",targetEncPos);
+
+
 		frc::SmartDashboard::PutNumber("Left Enc Pos", leftLeader.GetSelectedSensorPosition(Constant::Constant::pidChannel));
 		frc::SmartDashboard::PutNumber("Left Error", leftLeader.GetClosedLoopError(Constant::pidChannel));
 		frc::SmartDashboard::PutNumber("Left Target", leftLeader.GetClosedLoopTarget(Constant::pidChannel));
