@@ -17,6 +17,9 @@
 #include <AHRS.h>
 #include "Constant.h"
 
+enum driveMode {ARCADE, TANK};
+enum autonStates {START, DRIVE_COMMAND, WAIT} autonState;
+
 class Robot: public frc::TimedRobot {
 public:
 	void RobotInit() {
@@ -31,6 +34,8 @@ public:
 		gyro.Reset();
 		gyro.ZeroYaw();
 		UpdateDashboard();
+
+		autonState = START;
 	}
 
 	/*
@@ -77,8 +82,20 @@ public:
 
 	void AutonomousPeriodic() {
 		if (m_autoSelected == autoForwardTest) {
-			std::cout << "Forward Test\n";
-			DriveDistance(36);
+			switch(autonState)
+			{
+			case START:
+				leftLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
+				rightLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
+				autonState = DRIVE_COMMAND;
+				break;
+			case DRIVE_COMMAND:
+				DriveDistance(36);
+				autonState = WAIT;
+				break;
+			case WAIT:
+				break;
+			}
 			UpdateDashboard();
 		} else {
 			// Default Auto goes here
@@ -92,29 +109,58 @@ public:
 
 		gyro.Reset();
 		gyro.ZeroYaw();
+
 		UpdateDashboard();
 	}
 
 	void TeleopPeriodic() {
-		UpdateJoystick();
-		Drive();
+		//Drive(driveMode::ARCADE);
+		Drive(driveMode::TANK);
 		UpdateDashboard();
 	}
 
 	void TestPeriodic() {
 	}
 
-	void UpdateJoystick() {
-		leftJoyY = leftJoystick.GetY();
-		rightJoyY = rightJoystick.GetY();
+	void UpdateJoystickArcade() {
+		JoyY = joystick1.GetY();
+		JoyX = -joystick1.GetX();
+
+
 	}
 
-	void Drive() {
+	void UpdateJoystickTank() {
+
+			leftJoyY = joystick1.GetY();
+			rightJoyY = joystick2.GetY();
+		}
+
+	void Drive(driveMode mode) {
+
+		if(mode == driveMode::ARCADE)
+		{
+			UpdateJoystickArcade();
+			if (DeadbandArcade(JoyY) < 0) {
+				leftTarget = Deadband(JoyY + JoyX);
+				rightTarget = Deadband(JoyY - JoyX);
+			}
+			else {
+				leftTarget = Deadband(JoyY - JoyX);
+				rightTarget = Deadband(JoyY + JoyX);
+			}
+		}
+		else
+		{
+			UpdateJoystickTank();
+			leftTarget = Deadband(leftJoyY);
+			rightTarget = Deadband(rightJoyY);
+		}
+
 		//Left motor move, negative value = forward
-		leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, -Deadband(leftJoyY));
+		leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, -leftTarget);
 
 		//Right motor move
-		rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, Deadband(rightJoyY));
+		rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, rightTarget);
 	}
 
 	void DriveDistance(double inches)
@@ -143,15 +189,8 @@ public:
 		// P = (percent output * max motor output) / error
 		//		50% output when error is 1 rotation away (pulsesPerRotationQuad = encoder counts for 1 rotation)
 		//		1023 = max motor output (units for motor output are a scalar from -1023 to +1023)
-		leftLeader.Config_kP(Constant::pidChannel, (0.75 * 1023) / Constant::pulsesPerRotationQuad, 0);
-		leftLeader.Config_kF(Constant::pidChannel, 0.0, 0);
-		leftLeader.Config_kI(Constant::pidChannel, 0.0, 0);
-		leftLeader.Config_kD(Constant::pidChannel, 0.0, 0);
-
-		rightLeader.Config_kP(Constant::pidChannel, (0.75 * 1023) / Constant::pulsesPerRotationQuad, 0);
-		rightLeader.Config_kF(Constant::pidChannel, 0.0, 0);
-		rightLeader.Config_kI(Constant::pidChannel, 0.0, 0);
-		rightLeader.Config_kD(Constant::pidChannel, 0.0, 0);
+		leftLeader.Config_kP(Constant::pidChannel, (0.5 * 1023) / Constant::pulsesPerRotationQuad, 0);
+		rightLeader.Config_kP(Constant::pidChannel, (0.5 * 1023) / Constant::pulsesPerRotationQuad, 0);
 
 		leftFollower.Set(ctre::phoenix::motorcontrol::ControlMode::Follower, 1);
 
@@ -167,9 +206,6 @@ public:
 	}
 
 	void UpdateDashboard() {
-		frc::SmartDashboard::PutNumber("Target Enc Pos",targetEncPos);
-
-
 		frc::SmartDashboard::PutNumber("Left Enc Pos", leftLeader.GetSelectedSensorPosition(Constant::Constant::pidChannel));
 		frc::SmartDashboard::PutNumber("Left Error", leftLeader.GetClosedLoopError(Constant::pidChannel));
 		frc::SmartDashboard::PutNumber("Left Target", leftLeader.GetClosedLoopTarget(Constant::pidChannel));
@@ -180,9 +216,9 @@ public:
 		frc::SmartDashboard::PutNumber("Angle", getGyro());
 
 		frc::SmartDashboard::PutNumber("Left % Output", leftLeader.GetMotorOutputPercent());
-		frc::SmartDashboard::PutNumber("Left Joystick", leftJoyY);
+		frc::SmartDashboard::PutNumber("Left Joystick", JoyY);
 		frc::SmartDashboard::PutNumber("Right %  Output", rightLeader.GetMotorOutputPercent());
-		frc::SmartDashboard::PutNumber("Right Joystick", rightJoyY);
+		frc::SmartDashboard::PutNumber("Right Joystick", JoyY);
 	}
 
 	double getGyro() {
@@ -196,6 +232,14 @@ public:
 			return value;
 	}
 
+	double DeadbandArcade(double value)
+	{
+		if (value <= .2 && value >= -.2)
+					return 0;
+				else
+					return value;
+	}
+
 private:
 	frc::LiveWindow& m_lw = *LiveWindow::GetInstance();
 	frc::SendableChooser<std::string> m_chooser;
@@ -206,11 +250,16 @@ private:
 	TalonSRX leftFollower { Constant::LeftFollowerID };
 	TalonSRX rightLeader { Constant::RightLeaderID };
 	TalonSRX rightFollower { Constant::RightFollowerID };
-	Joystick rightJoystick { 0 };
-	Joystick leftJoystick { 1 };
+	Joystick joystick1 { 0 };		// Arcade and Left Tank
+	Joystick joystick2 {1};			// Right Tank
+	double JoyX;
+	double JoyY;
 	double leftJoyY;
 	double rightJoyY;
+	double leftTarget;
+	double rightTarget;
 	double targetEncPos;
+
 	AHRS gyro { SerialPort::kMXP };
 
 	std::string colorSides;
