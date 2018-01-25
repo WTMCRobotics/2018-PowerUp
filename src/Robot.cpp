@@ -17,8 +17,12 @@
 #include <AHRS.h>
 #include "Constant.h"
 
-enum driveMode {ARCADE, TANK};
-enum autonStates {START, DRIVE_COMMAND, WAIT} autonState;
+enum driveMode {
+	ARCADE, TANK
+};
+enum autonStates {
+	START, DRIVE_COMMAND, WAIT
+} autonState;
 
 class Robot: public frc::TimedRobot {
 public:
@@ -29,7 +33,6 @@ public:
 
 		leftLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
 		rightLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
-
 
 		gyro.Reset();
 		gyro.ZeroYaw();
@@ -74,7 +77,6 @@ public:
 		leftLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
 		rightLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
 
-
 		gyro.Reset();
 		gyro.ZeroYaw();
 		UpdateDashboard();
@@ -82,11 +84,12 @@ public:
 
 	void AutonomousPeriodic() {
 		if (m_autoSelected == autoForwardTest) {
-			switch(autonState)
-			{
+			switch (autonState) {
 			case START:
-				leftLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
-				rightLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
+				leftLeader.SetSelectedSensorPosition(0, Constant::pidChannel,
+						0);
+				rightLeader.SetSelectedSensorPosition(0, Constant::pidChannel,
+						0);
 				autonState = DRIVE_COMMAND;
 				break;
 			case DRIVE_COMMAND:
@@ -114,8 +117,8 @@ public:
 	}
 
 	void TeleopPeriodic() {
-		//Drive(driveMode::ARCADE);
-		Drive(driveMode::TANK);
+		Drive(driveMode::ARCADE);
+		//Drive(driveMode::TANK);
 		UpdateDashboard();
 	}
 
@@ -125,100 +128,125 @@ public:
 	void UpdateJoystickArcade() {
 		JoyY = joystick1.GetY();
 		JoyX = -joystick1.GetX();
-
+		JoyZ = joystick1.GetZ();
 
 	}
 
 	void UpdateJoystickTank() {
 
-			leftJoyY = joystick1.GetY();
-			rightJoyY = joystick2.GetY();
-		}
+		leftJoyY = joystick1.GetY();
+		rightJoyY = joystick2.GetY();
+	}
 
 	void Drive(driveMode mode) {
 
-		if(mode == driveMode::ARCADE)
-		{
+		if (mode == driveMode::ARCADE) {
+
 			UpdateJoystickArcade();
-			if (DeadbandArcade(JoyY) < 0) {
+			if (DeadbandArcade(JoyZ) != 0 && Deadband(JoyY) == 0 && Deadband(JoyX) == 0 ) {
+				if (JoyZ > 0) {
+					leftTarget = -JoyZ;
+					rightTarget = JoyZ;
+				} else {
+					leftTarget = -JoyZ;
+					rightTarget = JoyZ;
+				}
+			}
+			else if (DeadbandArcade(JoyY) <= 0) {
 				leftTarget = Deadband(JoyY + JoyX);
 				rightTarget = Deadband(JoyY - JoyX);
 			}
+
 			else {
 				leftTarget = Deadband(JoyY - JoyX);
 				rightTarget = Deadband(JoyY + JoyX);
 			}
-		}
-		else
-		{
+		} else {
 			UpdateJoystickTank();
 			leftTarget = Deadband(leftJoyY);
 			rightTarget = Deadband(rightJoyY);
 		}
 
 		//Left motor move, negative value = forward
-		leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, -leftTarget);
+		leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput,
+				-leftTarget);
 
 		//Right motor move
-		rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, rightTarget);
+		rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput,
+				rightTarget);
 	}
 
-	void DriveDistance(double inches)
-	{
+	void DriveDistance(double inches) {
 		// inches / circumference = number of rotations
 		// * pulsesPerRotationQuad = number of pulses in one rotation
 		// targetEncPos = position encoder should read
-		targetEncPos = (inches / Constant::circumference) * Constant::pulsesPerRotationQuad;
+		targetEncPos = (inches / Constant::circumference)
+				* Constant::pulsesPerRotationQuad;
 		// Forward = positive encoder position for left
-		leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::Position, targetEncPos);
+		leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::Position,
+				targetEncPos);
 		// Forward = negative encoder position for right
-		rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::Position, -targetEncPos);
+		rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::Position,
+				-targetEncPos);
 	}
 
 	void SetupMotor() {
 		//Left motor setup
-		leftLeader.ConfigSelectedFeedbackSensor(ctre::phoenix::motorcontrol::FeedbackDevice::QuadEncoder, 0, 0);
+		leftLeader.ConfigSelectedFeedbackSensor(
+				ctre::phoenix::motorcontrol::FeedbackDevice::QuadEncoder, 0, 0);
 		leftLeader.SetSensorPhase(true);
 		leftLeader.ConfigNominalOutputForward(0, 0);
 		leftLeader.ConfigNominalOutputReverse(0, 0);
 		leftLeader.ConfigPeakOutputForward(1, 0);
 		leftLeader.ConfigPeakOutputReverse(-1, 0);
-		leftLeader.SetNeutralMode(ctre::phoenix::motorcontrol::NeutralMode::Brake);
+		leftLeader.SetNeutralMode(
+				ctre::phoenix::motorcontrol::NeutralMode::Brake);
 
 		// Set Left PID
 		// P = (percent output * max motor output) / error
 		//		50% output when error is 1 rotation away (pulsesPerRotationQuad = encoder counts for 1 rotation)
 		//		1023 = max motor output (units for motor output are a scalar from -1023 to +1023)
-		leftLeader.Config_kP(Constant::pidChannel, (0.5 * 1023) / Constant::pulsesPerRotationQuad, 0);
-		rightLeader.Config_kP(Constant::pidChannel, (0.5 * 1023) / Constant::pulsesPerRotationQuad, 0);
+		leftLeader.Config_kP(Constant::pidChannel,
+				(0.5 * 1023) / Constant::pulsesPerRotationQuad, 0);
+		rightLeader.Config_kP(Constant::pidChannel,
+				(0.5 * 1023) / Constant::pulsesPerRotationQuad, 0);
 
 		leftFollower.Set(ctre::phoenix::motorcontrol::ControlMode::Follower, 1);
 
 		//Right motor setup
-		rightLeader.ConfigSelectedFeedbackSensor(ctre::phoenix::motorcontrol::FeedbackDevice::QuadEncoder, Constant::pidChannel, 0);
+		rightLeader.ConfigSelectedFeedbackSensor(
+				ctre::phoenix::motorcontrol::FeedbackDevice::QuadEncoder,
+				Constant::pidChannel, 0);
 		rightLeader.SetSensorPhase(true);
 		rightLeader.ConfigNominalOutputForward(0, 0);
 		rightLeader.ConfigNominalOutputReverse(0, 0);
 		rightLeader.ConfigPeakOutputForward(1, 0);
 		rightLeader.ConfigPeakOutputReverse(-1, 0);
-		rightLeader.SetNeutralMode(ctre::phoenix::motorcontrol::NeutralMode::Brake);
-		rightFollower.Set(ctre::phoenix::motorcontrol::ControlMode::Follower, 4);
+		rightLeader.SetNeutralMode(
+				ctre::phoenix::motorcontrol::NeutralMode::Brake);
+		rightFollower.Set(ctre::phoenix::motorcontrol::ControlMode::Follower,
+				4);
 	}
 
 	void UpdateDashboard() {
-		frc::SmartDashboard::PutNumber("Left Enc Pos", leftLeader.GetSelectedSensorPosition(Constant::Constant::pidChannel));
-		frc::SmartDashboard::PutNumber("Left Error", leftLeader.GetClosedLoopError(Constant::pidChannel));
-		frc::SmartDashboard::PutNumber("Left Target", leftLeader.GetClosedLoopTarget(Constant::pidChannel));
+		frc::SmartDashboard::PutNumber("Left Enc Pos",
+				leftLeader.GetSelectedSensorPosition(
+						Constant::Constant::pidChannel));
+		frc::SmartDashboard::PutNumber("Left Error",
+				leftLeader.GetClosedLoopError(Constant::pidChannel));
+		frc::SmartDashboard::PutNumber("Left Target",
+				leftLeader.GetClosedLoopTarget(Constant::pidChannel));
 
-		frc::SmartDashboard::PutNumber("Right Enc Pos", rightLeader.GetSelectedSensorPosition(Constant::pidChannel));
-		frc::SmartDashboard::PutNumber("Right Error", rightLeader.GetClosedLoopError(Constant::pidChannel));
-		frc::SmartDashboard::PutNumber("Right Target", rightLeader.GetClosedLoopTarget(Constant::pidChannel));
+		frc::SmartDashboard::PutNumber("Right Enc Pos",
+				rightLeader.GetSelectedSensorPosition(Constant::pidChannel));
+		frc::SmartDashboard::PutNumber("Right Error",
+				rightLeader.GetClosedLoopError(Constant::pidChannel));
+		frc::SmartDashboard::PutNumber("Right Target",
+				rightLeader.GetClosedLoopTarget(Constant::pidChannel));
 		frc::SmartDashboard::PutNumber("Angle", getGyro());
 
-		frc::SmartDashboard::PutNumber("Left % Output", leftLeader.GetMotorOutputPercent());
-		frc::SmartDashboard::PutNumber("Left Joystick", JoyY);
-		frc::SmartDashboard::PutNumber("Right %  Output", rightLeader.GetMotorOutputPercent());
-		frc::SmartDashboard::PutNumber("Right Joystick", JoyY);
+		frc::SmartDashboard::PutNumber("Left Target", leftTarget);
+		frc::SmartDashboard::PutNumber("Right Target", rightTarget);
 	}
 
 	double getGyro() {
@@ -232,12 +260,11 @@ public:
 			return value;
 	}
 
-	double DeadbandArcade(double value)
-	{
+	double DeadbandArcade(double value) {
 		if (value <= .2 && value >= -.2)
-					return 0;
-				else
-					return value;
+			return 0;
+		else
+			return value;
 	}
 
 private:
@@ -251,9 +278,10 @@ private:
 	TalonSRX rightLeader { Constant::RightLeaderID };
 	TalonSRX rightFollower { Constant::RightFollowerID };
 	Joystick joystick1 { 0 };		// Arcade and Left Tank
-	Joystick joystick2 {1};			// Right Tank
+	Joystick joystick2 { 1 };			// Right Tank
 	double JoyX;
 	double JoyY;
+	double JoyZ;
 	double leftJoyY;
 	double rightJoyY;
 	double leftTarget;
