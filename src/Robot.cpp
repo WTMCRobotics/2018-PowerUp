@@ -36,7 +36,7 @@ public:
 
 		gyro.Reset();
 		gyro.ZeroYaw();
-		UpdateDashboard();
+		updateDashboard();
 
 		autonState = START;
 	}
@@ -80,7 +80,7 @@ public:
 
 		gyro.Reset();
 		gyro.ZeroYaw();
-		UpdateDashboard();
+		updateDashboard();
 	}
 
 	void AutonomousPeriodic() {
@@ -94,14 +94,14 @@ public:
 				break;
 			case DRIVE_COMMAND:
 				currentAngle = 0;
-				if (TurnDegrees("right", 90)) {
+				if (turnDegrees("right", 90)) {
 				autonState = WAIT;
 				}
 				break;
 			case WAIT:
 				break;
 			}
-			UpdateDashboard();
+			updateDashboard();
 		} else {
 			// Default Auto goes here
 		}
@@ -115,29 +115,29 @@ public:
 		gyro.Reset();
 		gyro.ZeroYaw();
 
-		UpdateDashboard();
+		updateDashboard();
 	}
 
 	void TeleopPeriodic() {
 		//Drive(driveMode::ARCADE);
 		Drive(driveMode::TANK);
-		UpdateDashboard();
+		updateDashboard();
 	}
 
 	void TestPeriodic() {
 	}
 
 	void UpdateJoystickArcade() {
-		JoyY = joystick1.GetY();
-		JoyX = -joystick1.GetX();
-		JoyZ = joystick1.GetZ();
+		joyY = joystick1.GetY();
+		joyX = -joystick1.GetX();
+		joyZ = joystick1.GetZ();
 
 	}
 
 	void UpdateJoystickTank() {
 
-		leftJoyY = joystick1.GetY();
-		rightJoyY = joystick2.GetY();
+		leftjoyY = joystick1.GetY();
+		rightjoyY = joystick2.GetY();
 	}
 
 	void Drive(driveMode mode) {
@@ -145,28 +145,28 @@ public:
 		if (mode == driveMode::ARCADE) {
 
 			UpdateJoystickArcade();
-			if (DeadbandArcade(JoyZ) != 0 && Deadband(JoyY) == 0 && Deadband(JoyX) == 0 ) {
-				if (JoyZ > 0) {
-					leftTarget = -JoyZ;
-					rightTarget = JoyZ;
+			if (DeadbandArcade(joyZ) != 0 && Deadband(joyY) == 0 && Deadband(joyX) == 0 ) {
+				if (joyZ > 0) {
+					leftTarget = -joyZ;
+					rightTarget = joyZ;
 				} else {
-					leftTarget = -JoyZ;
-					rightTarget = JoyZ;
+					leftTarget = -joyZ;
+					rightTarget = joyZ;
 				}
 			}
-			else if (DeadbandArcade(JoyY) <= 0) {
-				leftTarget = Deadband(JoyY + JoyX);
-				rightTarget = Deadband(JoyY - JoyX);
+			else if (DeadbandArcade(joyY) <= 0) {
+				leftTarget = Deadband(joyY + joyX);
+				rightTarget = Deadband(joyY - joyX);
 			}
 
 			else {
-				leftTarget = Deadband(JoyY - JoyX);
-				rightTarget = Deadband(JoyY + JoyX);
+				leftTarget = Deadband(joyY - joyX);
+				rightTarget = Deadband(joyY + joyX);
 			}
 		} else {
 			UpdateJoystickTank();
-			leftTarget = Deadband(leftJoyY);
-			rightTarget = Deadband(rightJoyY);
+			leftTarget = Deadband(leftjoyY);
+			rightTarget = Deadband(rightjoyY);
 		}
 
 
@@ -192,8 +192,8 @@ public:
 		rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, rightTarget);
 	}
 
-	void DriveDistance(double inches) {
-		UpdateDashboard();
+	void driveDistance(double inches) {
+		updateDashboard();
 		// inches / circumference = number of rotations
 		// * pulsesPerRotationQuad = number of pulses in one rotation
 		// targetEncPos = position encoder should read
@@ -241,7 +241,7 @@ public:
 		rightFollower.SetInverted(false);
 	}
 
-	void UpdateDashboard() {
+	void updateDashboard() {
 		frc::SmartDashboard::PutNumber("Left Enc Pos", leftLeader.GetSelectedSensorPosition(Constant::Constant::pidChannel));
 		frc::SmartDashboard::PutNumber("Left Error", leftLeader.GetClosedLoopError(Constant::pidChannel));
 		frc::SmartDashboard::PutNumber("Left Target", leftLeader.GetClosedLoopTarget(Constant::pidChannel));
@@ -260,7 +260,7 @@ public:
 		return gyro.GetYaw();
 	}
 
-	bool TurnDegrees(std::string direction, double angle) {
+	bool turnDegrees(std::string direction, double angle) {
 		currentAngle = getGyro();
 		if(currentAngle >= angle) {
 			leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
@@ -268,16 +268,20 @@ public:
 			return true;
 		}
 		if (direction == "left") {
-			leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, -0.5);
-			rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, -0.5);
+			leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, (-0.5*(angle-currentAngle)));
+			rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput,  (-0.5*(angle-currentAngle)));
 			currentAngle = getGyro();
 			return false;
 		}
 		else {
-			leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0.5);
-			rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0.5);
+			leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput,  (0.5*(angle-currentAngle)));
+			rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput,  (0.5*(angle-currentAngle)));
 			return false;
 		}
+	}
+
+	double getOutput(double difference) {
+
 	}
 
 	double Deadband(double value) {
@@ -306,11 +310,11 @@ private:
 	TalonSRX rightFollower { Constant::RightFollowerID };
 	Joystick joystick1 { 0 };		// Arcade and Left Tank
 	Joystick joystick2 { 1 };			// Right Tank
-	double JoyX;
-	double JoyY;
-	double JoyZ;
-	double leftJoyY;
-	double rightJoyY;
+	double joyX;
+	double joyY;
+	double joyZ;
+	double leftjoyY;
+	double rightjoyY;
 	double leftTarget;
 	double rightTarget;
 	double targetEncPos;
