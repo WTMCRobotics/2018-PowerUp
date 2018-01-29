@@ -7,6 +7,7 @@
 
 #include <iostream>
 #include <string>
+#include <cmath>
 
 #include <LiveWindow/LiveWindow.h>
 #include <SmartDashboard/SendableChooser.h>
@@ -16,6 +17,7 @@
 #include <Joystick.h>
 #include <AHRS.h>
 #include "Constant.h"
+#include "PIDController.h"
 
 enum driveMode {
 	ARCADE, TANK
@@ -91,11 +93,11 @@ public:
 				rightLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
 				autonState = DRIVE_COMMAND;
 				gyro.ZeroYaw();
+				Wait(0.005);
 				break;
 			case DRIVE_COMMAND:
-				currentAngle = 0;
 				if (turnDegrees("right", 90)) {
-				autonState = WAIT;
+					autonState = WAIT;
 				}
 				break;
 			case WAIT:
@@ -206,8 +208,7 @@ public:
 
 	void SetupMotor() {
 		//Left motor setup
-		leftLeader.ConfigSelectedFeedbackSensor(
-				ctre::phoenix::motorcontrol::FeedbackDevice::QuadEncoder, 0, 0);
+		leftLeader.ConfigSelectedFeedbackSensor(ctre::phoenix::motorcontrol::FeedbackDevice::QuadEncoder, 0, 0);
 		leftLeader.SetSensorPhase(true);
 		leftLeader.SetInverted(false);
 		leftLeader.ConfigNominalOutputForward(0, 0);
@@ -262,26 +263,30 @@ public:
 
 	bool turnDegrees(std::string direction, double angle) {
 		currentAngle = getGyro();
-		if(currentAngle >= angle) {
+		if(getGyro() >= angle) {
 			leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
 			rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
 			return true;
 		}
 		if (direction == "left") {
-			leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, (-0.5*(angle-currentAngle)));
-			rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput,  (-0.5*(angle-currentAngle)));
-			currentAngle = getGyro();
+			leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, -(getOutput(angle, getGyro())));
+			rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput,  -(getOutput(angle, getGyro())));
 			return false;
 		}
 		else {
-			leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput,  (0.5*(angle-currentAngle)));
-			rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput,  (0.5*(angle-currentAngle)));
+			leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput,  getOutput(angle, getGyro()));
+			rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput,  getOutput(angle, getGyro()));
 			return false;
 		}
 	}
 
-	double getOutput(double difference) {
-
+	double getOutput(double target, double current) {
+		if (pow((target-current)/90, 2.0) >= 0.25) {
+			return pow((target-current)/90, 2.0);
+		}
+		else {
+			return 0.25;
+		}
 	}
 
 	double Deadband(double value) {
@@ -310,6 +315,7 @@ private:
 	TalonSRX rightFollower { Constant::RightFollowerID };
 	Joystick joystick1 { 0 };		// Arcade and Left Tank
 	Joystick joystick2 { 1 };			// Right Tank
+	//PIDController pidController {0, 0, 0, gyro, leftLeader};
 	double joyX;
 	double joyY;
 	double joyZ;
