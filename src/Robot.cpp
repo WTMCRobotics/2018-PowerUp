@@ -262,7 +262,7 @@ public:
 
 	bool TurnDegrees(std::string direction, double angle) {
 		currentAngle = getGyro();
-		if(currentAngle >= (angle - 2) && currentAngle <= (angle + 2)) {
+		if(currentAngle >= angle) {
 			leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
 			rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
 			return true;
