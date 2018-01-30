@@ -96,7 +96,7 @@ public:
 				Wait(0.005);
 				break;
 			case DRIVE_COMMAND:
-				if (turnDegrees("right", 90)) {
+				if (turnDegrees(false, 90)) {
 					autonState = WAIT;
 				}
 				break;
@@ -261,14 +261,22 @@ public:
 		return gyro.GetYaw();
 	}
 
-	bool turnDegrees(std::string direction, double angle) {
+	bool turnDegrees(bool left, double angle) {
 		currentAngle = getGyro();
 		if(getGyro() >= angle) {
 			leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
 			rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
+
+			if(getGyro() < angle + 0.2 && getGyro() > angle - 0.2) {
+				if (left) {
+					turnDegrees(false, angle);
+				} else {
+					turnDegrees(true, angle);
+				}
+			}
 			return true;
 		}
-		if (direction == "left") {
+		if (left) {
 			leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, -(getOutput(angle, getGyro())));
 			rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput,  -(getOutput(angle, getGyro())));
 			return false;
