@@ -218,11 +218,16 @@ public:
 		leftLeader.SetNeutralMode(ctre::phoenix::motorcontrol::NeutralMode::Brake);
 
 		// Set Left PID
-		// P = (percent output * max motor output) / error
-		//		50% output when error is 1 rotation away (pulsesPerRotationQuad = encoder counts for 1 rotation)
-		//		1023 = max motor output (units for motor output are a scalar from -1023 to +1023)
-		leftLeader.Config_kP(Constant::pidChannel, (0.5 * 1023) / Constant::pulsesPerRotationQuad, 0);
-		rightLeader.Config_kP(Constant::pidChannel, (0.5 * 1023) / Constant::pulsesPerRotationQuad, 0);
+		// Values were tested using Web Interface
+		leftLeader.Config_kP(Constant::pidChannel, .49, 0);
+		leftLeader.Config_kI(Constant::pidChannel, .009, 0);
+		leftLeader.Config_kD(Constant::pidChannel, 13, 0);
+		leftLeader.Config_IntegralZone(Constant::pidChannel, 100, 0);
+
+		rightLeader.Config_kP(Constant::pidChannel, .5, 0);
+		rightLeader.Config_kI(Constant::pidChannel, .009, 0);
+		rightLeader.Config_kD(Constant::pidChannel, 13, 0);
+		rightLeader.Config_IntegralZone(Constant::pidChannel, 100, 0);
 
 		leftFollower.Set(ctre::phoenix::motorcontrol::ControlMode::Follower, 1);
 		leftFollower.SetSensorPhase(true);
@@ -252,6 +257,10 @@ public:
 		frc::SmartDashboard::PutNumber("Right Target", rightLeader.GetClosedLoopTarget(Constant::pidChannel));
 		frc::SmartDashboard::PutNumber("Angle", getGyro());
 
+		frc::SmartDashboard::PutString("Start", (autonState == START) ? "true" : "false");
+		frc::SmartDashboard::PutString("Drive", (autonState == DRIVE_COMMAND) ? "true" : "false");
+		frc::SmartDashboard::PutString("Wait", (autonState == WAIT) ? "true" : "false");
+
 		frc::SmartDashboard::PutNumber("current angle", currentAngle);
 
 
@@ -262,39 +271,73 @@ public:
 	}
 
 	bool turnDegrees(bool left, double angle) {
+		std::cout<<"turnDegrees" << std::endl;
+
 		currentAngle = getGyro();
-		if(getGyro() >= angle) {
+
+		if(currentAngle > angle - 2 && currentAngle < angle + 2) {
 			leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
 			rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
-
-			if(getGyro() < angle + 0.2 && getGyro() > angle - 0.2) {
-				if (left) {
-					turnDegrees(false, angle);
-				} else {
-					turnDegrees(true, angle);
-				}
-			}
 			return true;
 		}
+
+//		if((currentAngle >= angle && left == false) || (currentAngle <= angle && left == true)) {
+//			if (left) {
+//				turnDegreesAgain(false, angle);
+//			} else {
+//				turnDegreesAgain(true, angle);
+//			}
+//		}
+
 		if (left) {
-			leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, -(getOutput(angle, getGyro())));
-			rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput,  -(getOutput(angle, getGyro())));
+			leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, -(getOutput(angle, currentAngle)));
+			rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput,  -(getOutput(angle, currentAngle)));
 			return false;
 		}
 		else {
-			leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput,  getOutput(angle, getGyro()));
-			rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput,  getOutput(angle, getGyro()));
+			leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput,  getOutput(angle, currentAngle));
+			rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput,  getOutput(angle, currentAngle));
 			return false;
+		}
+
+	}
+
+	void turnDegreesAgain(bool left, double angle) {
+//		if((currentAngle >= angle && left == false) || (currentAngle <= angle && left == true)) {
+//			leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
+//			rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
+//
+//			return;
+//		}
+		std::cout << "TurnAgain" << std::endl;
+		currentAngle = getGyro();
+
+		if (left) {
+			leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, -(getOutput(angle, currentAngle)));
+			rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput,  -(getOutput(angle, currentAngle)));
+			return;
+		}
+		else {
+			leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput,  getOutput(angle, currentAngle));
+			rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput,  getOutput(angle, currentAngle));
+			return;
 		}
 	}
 
 	double getOutput(double target, double current) {
-		if (pow((target-current)/90, 2.0) >= 0.25) {
-			return pow((target-current)/90, 2.0);
-		}
-		else {
+		if((fabs(target) - fabs(current)) > 15) {
+			return 0.3;
+		} else {
 			return 0.25;
 		}
+
+		//		if (pow((target-current)/90, 4.0) >= 0.25) {
+//			return pow((target-current)/90, 4.0);
+//		} else if ((pow((target-current)/90, 2.5)) <= 0.03) {
+//			return 0;
+//		} else {
+//			return 0.25;
+//		}
 	}
 
 	double Deadband(double value) {
@@ -321,9 +364,10 @@ private:
 	TalonSRX leftFollower { Constant::LeftFollowerID };
 	TalonSRX rightLeader { Constant::RightLeaderID };
 	TalonSRX rightFollower { Constant::RightFollowerID };
-	Joystick joystick1 { 0 };		// Arcade and Left Tank
+	Joystick joystick1 { 0 };		    // Arcade and Left Tank
 	Joystick joystick2 { 1 };			// Right Tank
-	//PIDController pidController {0, 0, 0, gyro, leftLeader};
+	PIDController pidController;
+
 	double joyX;
 	double joyY;
 	double joyZ;
