@@ -7,23 +7,25 @@
 
 #include <PIDMotorOutput.h>
 
-	PIDMotorOutput()
-	{
+PIDMotorOutput::PIDMotorOutput()
+{
 
-	}
+}
 
 
 PIDMotorOutput::PIDMotorOutput(TalonSRX* left, TalonSRX* right)
 {
-	leftMotor = left;
-	rightMotor = right;
+	pLeftMotor = left;
+	pRightMotor = right;
 }
 
-PIDMotorOutput::~PIDMotorOutput() {
+PIDMotorOutput::~PIDMotorOutput()
+{
 	// TODO Auto-generated destructor stub
 }
 
-PIDMotorOutput::pidWrite(double output)
-{
-	left.
-}
+//void PIDMotorOutput::pidWrite(double value)
+//{
+//	pLeftMotor->Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, -value);
+//	pRightMotor->Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, value);
+//}

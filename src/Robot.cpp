@@ -17,6 +17,8 @@
 #include <Joystick.h>
 #include <AHRS.h>
 #include "Constant.h"
+#include "PIDMotorOutput.h"
+#include "PIDGyroSource.h"
 #include "PIDController.h"
 
 enum driveMode {
@@ -366,7 +368,9 @@ private:
 	TalonSRX rightFollower { Constant::RightFollowerID };
 	Joystick joystick1 { 0 };		    // Arcade and Left Tank
 	Joystick joystick2 { 1 };			// Right Tank
-	PIDController pidController;
+	PIDMotorOutput pidMotorOutput {&leftLeader, &rightLeader};
+//	PIDGyroSource pidGyroSource {&gyro};
+//	PIDController pidController {0.0, 0.0, 0.0, &PIDGyroSource, &PIDMotorOutput};
 
 	double joyX;
 	double joyY;
