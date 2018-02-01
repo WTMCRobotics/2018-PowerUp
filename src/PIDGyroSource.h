@@ -15,13 +15,17 @@ class PIDGyroSource: public frc::PIDSource {
 
 private:
 	AHRS* pGyro;
+	 frc::PIDSourceType m_pidSourceType;
 
 public:
 
 	PIDGyroSource(AHRS* gyro);
 	virtual ~PIDGyroSource();
 
-	double pidGet();
+	double PIDGet() {return 0.0;}
+	void SetPDISourceType( frc::PIDSourceType pidSource) {m_pidSourceType = pidSource; }
+	frc::PIDSourceType GetPIDSourceType() const {return m_pidSourceType;}
+
 //	frc::PIDSourceType getPIDSourceType();
 };
 

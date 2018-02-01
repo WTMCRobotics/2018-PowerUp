@@ -10,7 +10,7 @@
 
 #include <LiveWindow/LiveWindow.h>
 #include <ctre/Phoenix.h>
-#include "PIDController.h"
+#include <PIDOutput.h>
 
 class PIDMotorOutput : public frc::PIDOutput
 {
@@ -24,7 +24,7 @@ public:
 	PIDMotorOutput(TalonSRX* leftMotor, TalonSRX* rightMotor);
 	virtual ~PIDMotorOutput();
 
-	void pidWrite(double value)
+	void PIDWrite(double value)
 	{
 		pLeftMotor->Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, -value);
 		pRightMotor->Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, value);

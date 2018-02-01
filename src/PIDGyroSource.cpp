@@ -15,9 +15,10 @@ PIDGyroSource::~PIDGyroSource() {
 	// TODO Auto-generated destructor stub
 }
 
-double PIDGyroSource::pidGet() {
-	return pGyro->GetYaw();
-}
+//double PIDGyroSource::pidGet()
+//{
+//	return pGyro->GetYaw();
+//}
 
 //frc::PIDSourceType PIDGyroSource::getPIDSourceType() {
 //	return frc::PIDSourceType.kDisplacement;

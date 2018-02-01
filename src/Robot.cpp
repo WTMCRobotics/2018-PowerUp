@@ -369,8 +369,8 @@ private:
 	Joystick joystick1 { 0 };		    // Arcade and Left Tank
 	Joystick joystick2 { 1 };			// Right Tank
 	PIDMotorOutput pidMotorOutput {&leftLeader, &rightLeader};
-//	PIDGyroSource pidGyroSource {&gyro};
-//	PIDController pidController {0.0, 0.0, 0.0, &PIDGyroSource, &PIDMotorOutput};
+	PIDGyroSource pidGyroSource {&gyro};
+	PIDController pidController {0.0, 0.0, 0.0, &pidGyroSource, &pidMotorOutput};
 
 	double joyX;
 	double joyY;

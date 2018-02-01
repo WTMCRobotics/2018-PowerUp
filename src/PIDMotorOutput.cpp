@@ -5,7 +5,7 @@
  *      Author: Team 6101
  */
 
-#include <PIDMotorOutput.h>
+#include "PIDMotorOutput.h"
 
 PIDMotorOutput::PIDMotorOutput()
 {
@@ -13,10 +13,10 @@ PIDMotorOutput::PIDMotorOutput()
 }
 
 
-PIDMotorOutput::PIDMotorOutput(TalonSRX* left, TalonSRX* right)
+PIDMotorOutput::PIDMotorOutput(TalonSRX* leftMotor, TalonSRX* rightMotor)
 {
-	pLeftMotor = left;
-	pRightMotor = right;
+	pLeftMotor = leftMotor;
+	pRightMotor = rightMotor;
 }
 
 PIDMotorOutput::~PIDMotorOutput()
