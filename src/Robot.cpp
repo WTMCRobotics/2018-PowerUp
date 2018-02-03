@@ -87,6 +87,7 @@ public:
 		pidController.SetInputRange(-180, 180);
 		pidController.SetOutputRange(-0.5, 0.5);
 		pidController.SetContinuous(true);
+		pidController.SetPercentTolerance(0.01);
 		//pidController.SetPID(0.1, 0.0, 0.0);
 		if(!pidController.IsEnabled()) {
 			pidController.Enable();
@@ -105,12 +106,14 @@ public:
 				Wait(0.005);
 				break;
 			case DRIVE_COMMAND:
-				isHere = true;
+//				isHere = true;
 				pidController.SetSetpoint(90);
 				updateDashboard();
 				if(pidController.OnTarget()) {
 					pidController.Disable();
 				}
+//				pidController.Disable();
+				//driveDistance(36);
 				break;
 			case WAIT:
 				break;
@@ -125,6 +128,8 @@ public:
 
 		leftLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
 		rightLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
+
+		pidController.Disable();
 
 		gyro.Reset();
 		gyro.ZeroYaw();
@@ -216,6 +221,11 @@ public:
 		leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::Position, targetEncPos);
 		// Forward = negative encoder position for right
 		rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::Position, -targetEncPos);
+
+		if(leftLeader.GetSelectedSensorPosition(Constant::pidChannel) == targetEncPos) {
+			leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
+			rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
+		}
 	}
 
 	void SetupMotor() {
