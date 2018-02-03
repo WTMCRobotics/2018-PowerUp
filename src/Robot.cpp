@@ -84,11 +84,18 @@ public:
 
 		gyro.Reset();
 		gyro.ZeroYaw();
+		pidController.SetInputRange(-180, 180);
+		pidController.SetOutputRange(-0.5, 0.5);
+		pidController.SetContinuous(true);
+		//pidController.SetPID(0.1, 0.0, 0.0);
+		if(!pidController.IsEnabled()) {
+			pidController.Enable();
+		}
 		updateDashboard();
 	}
 
 	void AutonomousPeriodic() {
-		if (m_autoSelected == autoForwardTest) {
+//		if (m_autoSelected == autoForwardTest) {
 			switch (autonState) {
 			case START:
 				leftLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
@@ -98,17 +105,20 @@ public:
 				Wait(0.005);
 				break;
 			case DRIVE_COMMAND:
-				if (turnDegrees(false, 90)) {
-					autonState = WAIT;
+				isHere = true;
+				pidController.SetSetpoint(90);
+				updateDashboard();
+				if(pidController.OnTarget()) {
+					pidController.Disable();
 				}
 				break;
 			case WAIT:
 				break;
 			}
 			updateDashboard();
-		} else {
-			// Default Auto goes here
-		}
+//		} else {
+//			// Default Auto goes here
+//		}
 	}
 
 	void TeleopInit() {
@@ -263,7 +273,11 @@ public:
 		frc::SmartDashboard::PutString("Drive", (autonState == DRIVE_COMMAND) ? "true" : "false");
 		frc::SmartDashboard::PutString("Wait", (autonState == WAIT) ? "true" : "false");
 
-		frc::SmartDashboard::PutNumber("current angle", currentAngle);
+		frc::SmartDashboard::PutString("PIDIsOnTarget", (pidController.OnTarget()) ? "true" : "false");
+		frc::SmartDashboard::PutNumber("PIDTarget", pidController.GetSetpoint());
+		frc::SmartDashboard::PutString("IsHere", (isHere) ? "true" : "false");
+		frc::SmartDashboard::PutNumber("PIDError", pidController.GetError());
+
 
 
 	}
@@ -370,7 +384,7 @@ private:
 	Joystick joystick2 { 1 };			// Right Tank
 	PIDMotorOutput pidMotorOutput {&leftLeader, &rightLeader};
 	PIDGyroSource pidGyroSource {&gyro};
-	PIDController pidController {0.0, 0.0, 0.0, &pidGyroSource, &pidMotorOutput};
+	PIDController pidController {0.025, 0.002, 0.0, &pidGyroSource, &pidMotorOutput};
 
 	double joyX;
 	double joyY;
@@ -382,6 +396,7 @@ private:
 	double targetEncPos;
 	double currentAngle;
 	bool turned;
+	bool isHere = false;
 	AHRS gyro { SerialPort::kMXP };
 
 	std::string colorSides;

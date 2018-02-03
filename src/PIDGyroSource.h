@@ -22,7 +22,7 @@ public:
 	PIDGyroSource(AHRS* gyro);
 	virtual ~PIDGyroSource();
 
-	double PIDGet() {return 0.0;}
+	double PIDGet();
 	void SetPDISourceType( frc::PIDSourceType pidSource) {m_pidSourceType = pidSource; }
 	frc::PIDSourceType GetPIDSourceType() const {return m_pidSourceType;}
 

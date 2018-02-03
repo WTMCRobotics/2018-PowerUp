@@ -24,12 +24,7 @@ public:
 	PIDMotorOutput(TalonSRX* leftMotor, TalonSRX* rightMotor);
 	virtual ~PIDMotorOutput();
 
-	void PIDWrite(double value)
-	{
-		pLeftMotor->Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, -value);
-		pRightMotor->Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, value);
-	}
-
+	void PIDWrite(double value);
 
 };
 
