@@ -20,12 +20,13 @@
 #include "PIDMotorOutput.h"
 #include "PIDGyroSource.h"
 #include "PIDController.h"
+#include <SerialPort.h>
 
 enum driveMode {
 	ARCADE, TANK
 };
 enum autonStates {
-	START, DRIVE_COMMAND, WAIT
+	START, TURN_INIT, TURN, WAIT
 } autonState;
 
 class Robot: public frc::TimedRobot {
@@ -82,16 +83,13 @@ public:
 		leftLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
 		rightLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
 
-		gyro.Reset();
 		gyro.ZeroYaw();
 		pidController.SetInputRange(-180, 180);
 		pidController.SetOutputRange(-0.5, 0.5);
 		pidController.SetContinuous(true);
-		pidController.SetPercentTolerance(0.01);
+		pidController.SetAbsoluteTolerance(1);
 		//pidController.SetPID(0.1, 0.0, 0.0);
-		if(!pidController.IsEnabled()) {
-			pidController.Enable();
-		}
+
 		updateDashboard();
 	}
 
@@ -101,19 +99,21 @@ public:
 			case START:
 				leftLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
 				rightLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
-				autonState = DRIVE_COMMAND;
+				autonState = TURN_INIT;
+				break;
+			case TURN_INIT:
 				gyro.ZeroYaw();
 				Wait(0.005);
-				break;
-			case DRIVE_COMMAND:
-//				isHere = true;
 				pidController.SetSetpoint(90);
-				updateDashboard();
+				pidController.Enable();
+				autonState = TURN;
+				break;
+			case TURN:
 				if(pidController.OnTarget()) {
 					pidController.Disable();
+					autonState = WAIT;
+					//gyro.ZeroYaw();
 				}
-//				pidController.Disable();
-				//driveDistance(36);
 				break;
 			case WAIT:
 				break;
@@ -137,6 +137,22 @@ public:
 		updateDashboard();
 	}
 
+	bool turnDegrees(double degrees) {
+		pidController.SetSetpoint(degrees);
+		if(pidController.OnTarget()) {
+			pidController.Disable();
+		}
+		updateDashboard();
+		if(pidController.OnTarget()) {
+			pidController.Reset();
+			return true;
+		}
+		else {
+			return false;
+		}
+
+	}
+
 	void TeleopPeriodic() {
 		//Drive(driveMode::ARCADE);
 		Drive(driveMode::TANK);
@@ -154,7 +170,6 @@ public:
 	}
 
 	void UpdateJoystickTank() {
-
 		leftjoyY = joystick1.GetY();
 		rightjoyY = joystick2.GetY();
 	}
@@ -279,91 +294,33 @@ public:
 		frc::SmartDashboard::PutNumber("Right Target", rightLeader.GetClosedLoopTarget(Constant::pidChannel));
 		frc::SmartDashboard::PutNumber("Angle", getGyro());
 
-		frc::SmartDashboard::PutString("Start", (autonState == START) ? "true" : "false");
-		frc::SmartDashboard::PutString("Drive", (autonState == DRIVE_COMMAND) ? "true" : "false");
-		frc::SmartDashboard::PutString("Wait", (autonState == WAIT) ? "true" : "false");
+		switch(autonState)
+		{
+		case START:
+			frc::SmartDashboard::PutString("Auton State", "Start");
+			break;
+		case TURN_INIT:
+			frc::SmartDashboard::PutString("Auton State", "Turn Init");
+			break;
+		case TURN:
+			frc::SmartDashboard::PutString("Auton State","Turn");
+			break;
+		case WAIT:
+			frc::SmartDashboard::PutString("Auton State", "Wait");
+		}
 
 		frc::SmartDashboard::PutString("PIDIsOnTarget", (pidController.OnTarget()) ? "true" : "false");
 		frc::SmartDashboard::PutNumber("PIDTarget", pidController.GetSetpoint());
-		frc::SmartDashboard::PutString("IsHere", (isHere) ? "true" : "false");
+		frc::SmartDashboard::PutString("IsEnabled", (pidController.IsEnabled()) ? "true" : "false");
 		frc::SmartDashboard::PutNumber("PIDError", pidController.GetError());
 
-
-
+		frc::SmartDashboard::PutNumber("P Gain", pidController.GetP());
+		frc::SmartDashboard::PutNumber("I Gain", pidController.GetI());
+		frc::SmartDashboard::PutNumber("D Gain", pidController.GetD());
 	}
 
 	double getGyro() {
 		return gyro.GetYaw();
-	}
-
-	bool turnDegrees(bool left, double angle) {
-		std::cout<<"turnDegrees" << std::endl;
-
-		currentAngle = getGyro();
-
-		if(currentAngle > angle - 2 && currentAngle < angle + 2) {
-			leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
-			rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
-			return true;
-		}
-
-//		if((currentAngle >= angle && left == false) || (currentAngle <= angle && left == true)) {
-//			if (left) {
-//				turnDegreesAgain(false, angle);
-//			} else {
-//				turnDegreesAgain(true, angle);
-//			}
-//		}
-
-		if (left) {
-			leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, -(getOutput(angle, currentAngle)));
-			rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput,  -(getOutput(angle, currentAngle)));
-			return false;
-		}
-		else {
-			leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput,  getOutput(angle, currentAngle));
-			rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput,  getOutput(angle, currentAngle));
-			return false;
-		}
-
-	}
-
-	void turnDegreesAgain(bool left, double angle) {
-//		if((currentAngle >= angle && left == false) || (currentAngle <= angle && left == true)) {
-//			leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
-//			rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
-//
-//			return;
-//		}
-		std::cout << "TurnAgain" << std::endl;
-		currentAngle = getGyro();
-
-		if (left) {
-			leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, -(getOutput(angle, currentAngle)));
-			rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput,  -(getOutput(angle, currentAngle)));
-			return;
-		}
-		else {
-			leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput,  getOutput(angle, currentAngle));
-			rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput,  getOutput(angle, currentAngle));
-			return;
-		}
-	}
-
-	double getOutput(double target, double current) {
-		if((fabs(target) - fabs(current)) > 15) {
-			return 0.3;
-		} else {
-			return 0.25;
-		}
-
-		//		if (pow((target-current)/90, 4.0) >= 0.25) {
-//			return pow((target-current)/90, 4.0);
-//		} else if ((pow((target-current)/90, 2.5)) <= 0.03) {
-//			return 0;
-//		} else {
-//			return 0.25;
-//		}
 	}
 
 	double Deadband(double value) {
@@ -394,7 +351,8 @@ private:
 	Joystick joystick2 { 1 };			// Right Tank
 	PIDMotorOutput pidMotorOutput {&leftLeader, &rightLeader};
 	PIDGyroSource pidGyroSource {&gyro};
-	PIDController pidController {0.025, 0.002, 0.0, &pidGyroSource, &pidMotorOutput};
+	PIDController pidController {0.005, 0.004, 0.0, &pidGyroSource, &pidMotorOutput};
+	SerialPort port{57600, SerialPort::kMXP};
 
 	double joyX;
 	double joyY;
@@ -407,7 +365,7 @@ private:
 	double currentAngle;
 	bool turned;
 	bool isHere = false;
-	AHRS gyro { SerialPort::kMXP };
+	AHRS gyro {port};
 
 	std::string colorSides;
 };
