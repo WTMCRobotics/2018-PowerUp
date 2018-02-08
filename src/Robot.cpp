@@ -26,7 +26,7 @@ enum driveMode {
 	ARCADE, TANK
 };
 enum autonStates {
-	START, TURN_INIT, TURN, WAIT
+	START, TURN, WAIT
 } autonState;
 
 class Robot: public frc::TimedRobot {
@@ -41,6 +41,7 @@ public:
 
 		gyro.Reset();
 		gyro.ZeroYaw();
+		waiting = false;
 		updateDashboard();
 
 		autonState = START;
@@ -52,7 +53,7 @@ public:
 	 * sendable chooser code works with the Java SmartDashboard. If you
 	 * prefer the LabVIEW Dashboard, remove all of the chooser code and
 	 * uncomment the GetString line to get the auto name from the text box
-	 * below the Gyro.
+	 * below the gyro.
 	 *
 	 * You can add additional auto modes by adding additional comparisons to
 	 * the if-else structure below with additional strings. If using the
@@ -83,13 +84,11 @@ public:
 		leftLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
 		rightLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
 
-		gyro.ZeroYaw();
 		pidController.SetInputRange(-180, 180);
 		pidController.SetOutputRange(-0.5, 0.5);
 		pidController.SetContinuous(true);
-		pidController.SetAbsoluteTolerance(1);
+		pidController.SetAbsoluteTolerance(4);
 		//pidController.SetPID(0.1, 0.0, 0.0);
-
 		updateDashboard();
 	}
 
@@ -99,20 +98,32 @@ public:
 			case START:
 				leftLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
 				rightLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
-				autonState = TURN_INIT;
-				break;
-			case TURN_INIT:
-				gyro.ZeroYaw();
-				Wait(0.005);
-				pidController.SetSetpoint(90);
-				pidController.Enable();
 				autonState = TURN;
+				std::cout << "calibration start\n";
+				while(gyro.IsCalibrating()) {}
+				gyro.ZeroYaw();
+				i = 0;
+				if(pidController.IsEnabled()) {
+					pidController.Disable();
+				}
 				break;
 			case TURN:
-				if(pidController.OnTarget()) {
-					pidController.Disable();
-					autonState = WAIT;
-					//gyro.ZeroYaw();
+				switch (i) {
+				case 0:
+					if (turnDegrees(90))
+					{
+						i++;
+						gyro.ZeroYaw();
+						while(!(gyro.GetYaw() < 0.01 && gyro.GetYaw() > -.01))
+							{waiting = true;}
+						waiting = false;
+					}
+					break;
+				case 1:
+					std::cout << "i is 1\n";
+					if(turnDegrees(-90))
+						{autonState = WAIT;}
+					break;
 				}
 				break;
 			case WAIT:
@@ -138,19 +149,22 @@ public:
 	}
 
 	bool turnDegrees(double degrees) {
-		pidController.SetSetpoint(degrees);
-		if(pidController.OnTarget()) {
-			pidController.Disable();
+		if (!(pidController.IsEnabled())) {
+//			gyro.ZeroYaw();
+//			while(!(gyro.GetYaw() < 0.01 && gyro.GetYaw() > -.01)) {waiting = true;}
+//			waiting = false;
+			pidController.Enable();
+			pidController.SetSetpoint(degrees);
+		} else {
+			if(pidController.OnTarget()) {
+				pidController.Disable();
+				return true;
+			} else {
+				return false;
+			}
+			//return false;
 		}
 		updateDashboard();
-		if(pidController.OnTarget()) {
-			pidController.Reset();
-			return true;
-		}
-		else {
-			return false;
-		}
-
 	}
 
 	void TeleopPeriodic() {
@@ -293,14 +307,12 @@ public:
 		frc::SmartDashboard::PutNumber("Right Error", rightLeader.GetClosedLoopError(Constant::pidChannel));
 		frc::SmartDashboard::PutNumber("Right Target", rightLeader.GetClosedLoopTarget(Constant::pidChannel));
 		frc::SmartDashboard::PutNumber("Angle", getGyro());
+		frc::SmartDashboard::PutNumber("i", i);
 
 		switch(autonState)
 		{
 		case START:
 			frc::SmartDashboard::PutString("Auton State", "Start");
-			break;
-		case TURN_INIT:
-			frc::SmartDashboard::PutString("Auton State", "Turn Init");
 			break;
 		case TURN:
 			frc::SmartDashboard::PutString("Auton State","Turn");
@@ -317,6 +329,9 @@ public:
 		frc::SmartDashboard::PutNumber("P Gain", pidController.GetP());
 		frc::SmartDashboard::PutNumber("I Gain", pidController.GetI());
 		frc::SmartDashboard::PutNumber("D Gain", pidController.GetD());
+
+		frc::SmartDashboard::PutString("Firmware Version", gyro.GetFirmwareVersion());
+		frc::SmartDashboard::PutString("Waiting to Zero", (waiting) ? "true" : "false");
 	}
 
 	double getGyro() {
@@ -351,8 +366,7 @@ private:
 	Joystick joystick2 { 1 };			// Right Tank
 	PIDMotorOutput pidMotorOutput {&leftLeader, &rightLeader};
 	PIDGyroSource pidGyroSource {&gyro};
-	PIDController pidController {0.005, 0.004, 0.0, &pidGyroSource, &pidMotorOutput};
-	SerialPort port{57600, SerialPort::kMXP};
+	PIDController pidController {.025, 0, 0.015, &pidGyroSource, &pidMotorOutput, 0.02};
 
 	double joyX;
 	double joyY;
@@ -364,8 +378,12 @@ private:
 	double targetEncPos;
 	double currentAngle;
 	bool turned;
+	bool waiting;
 	bool isHere = false;
-	AHRS gyro {port};
+	int i = 0;
+	int j = 0;
+	AHRS gyro{I2C::Port::kMXP};
+
 
 	std::string colorSides;
 };
