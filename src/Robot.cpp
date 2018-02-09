@@ -100,7 +100,7 @@ public:
 				rightLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
 				autonState = TURN;
 				std::cout << "calibration start\n";
-				while(gyro.IsCalibrating()) {}
+				while(gyro.IsCalibrating()) {updateDashboard();}
 				gyro.ZeroYaw();
 				i = 0;
 				if(pidController.IsEnabled()) {
@@ -115,7 +115,7 @@ public:
 						i++;
 						gyro.ZeroYaw();
 						while(!(gyro.GetYaw() < 0.01 && gyro.GetYaw() > -.01))
-							{waiting = true;}
+							{waiting = true; updateDashboard();}
 						waiting = false;
 					}
 					break;
@@ -155,6 +155,7 @@ public:
 //			waiting = false;
 			pidController.Enable();
 			pidController.SetSetpoint(degrees);
+			return false;
 		} else {
 			if(pidController.OnTarget()) {
 				pidController.Disable();
@@ -162,7 +163,6 @@ public:
 			} else {
 				return false;
 			}
-			//return false;
 		}
 		updateDashboard();
 	}
