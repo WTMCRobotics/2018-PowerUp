@@ -122,10 +122,17 @@ public:
 		}
 		// Lined up on the left
 		else if (m_autoSelected == autoLeft) {
-
+			if(colorSides[0] == 'L'){
+				moveVector.push_back(168);
+				turnVector.push_back(90);
+			}
 		}
 		// Lined up on the right
 		else if (m_autoSelected == autoRight) {
+			if(colorSides[0] == 'R'){
+				moveVector.push_back(168);
+				turnVector.push_back(-90);
+			}
 		}
 		// Default auto
 		else if (m_autoSelected == autoDefault) {
@@ -415,6 +422,8 @@ public:
 		leftLeader.ConfigPeakOutputForward(1, 0);
 		leftLeader.ConfigPeakOutputReverse(-1, 0);
 		leftLeader.SetNeutralMode(ctre::phoenix::motorcontrol::NeutralMode::Brake);
+		leftFollower.SetSensorPhase(true);
+		leftFollower.SetInverted(false);
 
 		// Set Left PID
 		// Values were tested using Web Interface
@@ -435,16 +444,16 @@ public:
 		//Right motor setup
 		rightLeader.ConfigSelectedFeedbackSensor(ctre::phoenix::motorcontrol::FeedbackDevice::QuadEncoder,
 				Constant::pidChannel, 0);
-		rightLeader.SetSensorPhase(true);
-		rightLeader.SetInverted(false);
+		rightLeader.SetSensorPhase(false);
+		rightLeader.SetInverted(true);
 		rightLeader.ConfigNominalOutputForward(0, 0);
 		rightLeader.ConfigNominalOutputReverse(0, 0);
 		rightLeader.ConfigPeakOutputForward(1, 0);
 		rightLeader.ConfigPeakOutputReverse(-1, 0);
 		rightLeader.SetNeutralMode(ctre::phoenix::motorcontrol::NeutralMode::Brake);
 		rightFollower.Set(ctre::phoenix::motorcontrol::ControlMode::Follower, 4);
-		rightFollower.SetSensorPhase(true);
-		rightFollower.SetInverted(false);
+		rightFollower.SetSensorPhase(false);
+		rightFollower.SetInverted(true);
 	}
 
 	void updateDashboard() {
