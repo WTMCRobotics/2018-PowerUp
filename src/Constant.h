@@ -21,6 +21,13 @@ public:
 
 	static constexpr double pulsesPerRotationQuad = 2048 * 4;
 	static constexpr double circumference = 6 * 2 * 3.14;
+
+	static const double tankDriveDeadbandVal = .15;
+	static const double arcadeDriveDeadbandVal = .2;
+
+	// Target Calculation = (inches * 2 / Constant::circumference) * Constant::pulsesPerRotationQuad
+	//		Deadband = 109 = .25" * 2 / circumference * PPR quad
+	static const int autonPositionDeadbandVal = 109;
 };
 
 
