@@ -20,14 +20,14 @@ public:
 	static const int RightFollowerID = 3;
 
 	static constexpr double pulsesPerRotationQuad = 2048 * 4;
-	static constexpr double circumference = 6 * 2 * 3.14;
+	static constexpr double circumference = 6 * 3.14;
 
-	static const double tankDriveDeadbandVal = .15;
-	static const double arcadeDriveDeadbandVal = .2;
+	static constexpr double tankDriveDeadbandVal = .15;
+	static constexpr double arcadeDriveDeadbandVal = .2;
 
-	// Target Calculation = (inches * 2 / Constant::circumference) * Constant::pulsesPerRotationQuad
-	//		Deadband = 109 = .25" * 2 / circumference * PPR quad
-	static const int autonPositionDeadbandVal = 109;
+	// Target Calculation = (inches / Constant::circumference) * Constant::pulsesPerRotationQuad
+	//		Deadband = 130 = .3" / circumference * PPR quad
+	static const int autonPositionDeadbandVal = 130;
 };
 
 
