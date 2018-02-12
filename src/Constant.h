@@ -28,6 +28,12 @@ public:
 	// Target Calculation = (inches / Constant::circumference) * Constant::pulsesPerRotationQuad
 	//		Deadband = 130 = .3" / circumference * PPR quad
 	static const int autonPositionDeadbandVal = 130;
+
+	static constexpr double leftMotionVel = 0;
+	static constexpr double leftMotionAcc = 0;
+
+	static constexpr double rightMotionVel = 0;
+	static constexpr double rightMotionAcc = 0;
 };
 
 
