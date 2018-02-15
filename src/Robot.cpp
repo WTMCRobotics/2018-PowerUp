@@ -23,6 +23,9 @@
 #include "PIDController.h"
 #include <SerialPort.h>
 
+//#define JOYSTICK
+#define XBOX
+
 enum driveMode {
 	ARCADE, TANK
 };
@@ -332,16 +335,25 @@ public:
 	void TestPeriodic() {
 	}
 
+
 	void UpdateJoystickArcade() {
+#if defined(JOYSTICK)
 		joyY = joystick1.GetY();
 		joyX = -joystick1.GetX();
 		joyZ = joystick1.GetZ();
-
+#endif
 	}
 
+
+
 	void UpdateJoystickTank() {
+#if defined(JOYSTICK)
 		leftjoyY = joystick1.GetY();
 		rightjoyY = joystick2.GetY();
+#elif defined(XBOX)
+		leftjoyY = xboxController.GetY(frc::GenericHID::JoystickHand::kLeftHand);
+		rightjoyY = xboxController.GetY(frc::GenericHID::JoystickHand::kRightHand);
+#endif
 	}
 
 	void Drive(driveMode mode) {
@@ -405,8 +417,8 @@ public:
 			return true;
 		}
 
-		leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::MotionMagic, targetEncPos);
-		rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::MotionMagic, -targetEncPos);
+		leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::Position, targetEncPos);
+		rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::Position, -targetEncPos);
 
 //		// Forward = positive encoder position for left
 //		leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::Position, targetEncPos);
@@ -428,6 +440,9 @@ public:
 		leftLeader.ConfigMotionAcceleration(Constant::leftMotionAcc, 0);
 		leftLeader.SetSensorPhase(true);
 		leftLeader.SetInverted(false);
+
+		leftFollower.ConfigMotionCruiseVelocity(Constant::leftMotionVel, 0);
+		leftFollower.ConfigMotionAcceleration(Constant::leftMotionAcc, 0);
 		leftFollower.SetSensorPhase(true);
 		leftFollower.SetInverted(false);
 
@@ -443,6 +458,9 @@ public:
 		rightLeader.ConfigMotionAcceleration(Constant::rightMotionAcc, 0);
 		rightLeader.SetSensorPhase(false);
 		rightLeader.SetInverted(true);
+
+		rightFollower.ConfigMotionCruiseVelocity(Constant::leftMotionVel, 0);
+		rightFollower.ConfigMotionAcceleration(Constant::leftMotionAcc, 0);
 		rightFollower.SetSensorPhase(false);
 		rightFollower.SetInverted(true);
 
@@ -452,11 +470,13 @@ public:
 		leftLeader.Config_kI(Constant::pidChannel, .009, 0);
 		leftLeader.Config_kD(Constant::pidChannel, 13, 0);
 		leftLeader.Config_IntegralZone(Constant::pidChannel, 100, 0);
+		leftLeader.Config_kF(Constant::pidChannel, 0.514, 0);
 
 		rightLeader.Config_kP(Constant::pidChannel, .5, 0);
 		rightLeader.Config_kI(Constant::pidChannel, .009, 0);
 		rightLeader.Config_kD(Constant::pidChannel, 13, 0);
 		rightLeader.Config_IntegralZone(Constant::pidChannel, 100, 0);
+		rightLeader.Config_kF(Constant::pidChannel, 0.514, 0);
 
 		leftFollower.Set(ctre::phoenix::motorcontrol::ControlMode::Follower, 1);
 		rightFollower.Set(ctre::phoenix::motorcontrol::ControlMode::Follower, 4);
@@ -567,8 +587,10 @@ private:
 	TalonSRX leftFollower { Constant::LeftFollowerID };
 	TalonSRX rightLeader { Constant::RightLeaderID };
 	TalonSRX rightFollower { Constant::RightFollowerID };
+#if defined(JOYSTICK)
 	Joystick joystick1 { 0 };		    // Arcade and Left Tank
 	Joystick joystick2 { 1 };			// Right Tank
+#endif
 	PIDMotorOutput pidMotorOutput { &leftLeader, &rightLeader };
 	PIDGyroSource pidGyroSource { &gyro };
 	PIDController pidController { .025, 0, 0.015, &pidGyroSource, &pidMotorOutput, 0.02 };
@@ -578,6 +600,9 @@ private:
 	double joyZ;
 	double leftjoyY;
 	double rightjoyY;
+#if defined(XBOX)
+	XboxController xboxController{0};
+#endif
 	double leftTarget;
 	double rightTarget;
 	double targetEncPos;
