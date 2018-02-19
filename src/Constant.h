@@ -14,10 +14,10 @@ class Constant
 public:
 	static const int pidChannel = 0;
 
-	static const int LeftLeaderID = 1;
-	static const int LeftFollowerID = 2;
-	static const int RightLeaderID = 4;
-	static const int RightFollowerID = 3;
+	static const int LeftLeaderID = 11;
+	static const int LeftFollowerID = 12;
+	static const int RightLeaderID = 14;
+	static const int RightFollowerID = 13;
 
 	static constexpr double pulsesPerRotationQuad = 2048 * 4;
 	static constexpr double circumference = 6 * 3.14;
@@ -26,14 +26,13 @@ public:
 	static constexpr double arcadeDriveDeadbandVal = .2;
 
 	// Target Calculation = (inches / Constant::circumference) * Constant::pulsesPerRotationQuad
-	//		Deadband = 130 = .3" / circumference * PPR quad
-	static const int autonPositionDeadbandVal = 130;
+	static const int autonPositionDeadbandVal = 300;
 
-	static constexpr double leftMotionVel = 1990;
-	static constexpr double leftMotionAcc = 1990;
+	static constexpr double leftMotionVel = 5150;
+	static constexpr double leftMotionAcc = 5150 / 2;
 
-	static constexpr double rightMotionVel = -1990;
-	static constexpr double rightMotionAcc = -1990;
+	static constexpr double rightMotionVel = 5150;
+	static constexpr double rightMotionAcc = 5150 / 2;
 };
 
 

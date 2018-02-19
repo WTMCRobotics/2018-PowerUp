@@ -40,6 +40,8 @@ enum traverseStates {
 class Robot: public frc::TimedRobot {
 public:
 	void RobotInit() {
+
+		SetupMotor();
 		// Auton Chooser
 		m_chooser.AddDefault(autoDefault, autoDefault);
 		m_chooser.AddObject(autoMiddle, autoMiddle);
@@ -139,7 +141,11 @@ public:
 		}
 		// Default auto
 		else if (m_autoSelected == autoDefault) {
-			moveVector.push_back(130);
+//			moveVector.push_back(130);
+//			turnVector.push_back(0);
+			moveVector.push_back(150);
+			turnVector.push_back(179.99999999999);
+			moveVector.push_back(150);
 			turnVector.push_back(0);
 		} else {
 			moveVector.push_back(130);
@@ -150,7 +156,7 @@ public:
 		rightLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
 
 		pidController.SetInputRange(-180, 180);
-		pidController.SetOutputRange(-0.5, 0.5);
+		pidController.SetOutputRange(-0.3, 0.3);
 		pidController.SetContinuous(true);
 		pidController.SetAbsoluteTolerance(1);
 
@@ -229,6 +235,7 @@ public:
 					updateDashboard();
 					leftLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
 					rightLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
+					rightLeader.SetInverted(true);
 					updateDashboard();
 //					while (gyro.IsCalibrating()) {
 //						Wait(0.005);
@@ -353,6 +360,18 @@ public:
 #elif defined(XBOX)
 		leftjoyY = xboxController.GetY(frc::GenericHID::JoystickHand::kLeftHand);
 		rightjoyY = xboxController.GetY(frc::GenericHID::JoystickHand::kRightHand);
+
+		if((xboxController.GetTriggerAxis(frc::GenericHID::JoystickHand::kRightHand) >0.1)  && !(xboxController.GetTriggerAxis(frc::GenericHID::JoystickHand::kLeftHand))) {
+			leftjoyY = leftjoyY / 1.5;
+			rightjoyY = rightjoyY / 1.5;
+		}
+
+		if((xboxController.GetTriggerAxis(frc::GenericHID::JoystickHand::kLeftHand)) >0.1 && (xboxController.GetTriggerAxis(frc::GenericHID::JoystickHand::kRightHand) >0.1)) {
+			leftjoyY = leftjoyY / 3;
+			rightjoyY = rightjoyY / 3;
+		}
+
+
 #endif
 	}
 
@@ -397,11 +416,13 @@ public:
 		} else {
 			rightTarget *= rightTarget;
 		}
+
 		//Left motor move, negative value = forward
 		leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, -leftTarget);
 
 		//Right motor move
-		rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, rightTarget);
+		rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, -rightTarget);
+
 	}
 
 	bool driveDistance(double inches) {
@@ -417,8 +438,11 @@ public:
 			return true;
 		}
 
-		leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::Position, targetEncPos);
-		rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::Position, -targetEncPos);
+//		rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::Follower, Constant::LeftLeaderID);
+//		leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::Position, targetEncPos);
+
+		leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::MotionMagic, targetEncPos);
+		rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::MotionMagic, targetEncPos);
 
 //		// Forward = positive encoder position for left
 //		leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::Position, targetEncPos);
@@ -430,6 +454,7 @@ public:
 
 	void SetupMotor() {
 		//Left motor setup
+		leftLeader.ClearStickyFaults(0);
 		leftLeader.ConfigSelectedFeedbackSensor(ctre::phoenix::motorcontrol::FeedbackDevice::QuadEncoder, 0, 0);
 		leftLeader.ConfigNominalOutputForward(0, 0);
 		leftLeader.ConfigNominalOutputReverse(0, 0);
@@ -438,17 +463,23 @@ public:
 		leftLeader.SetNeutralMode(ctre::phoenix::motorcontrol::NeutralMode::Brake);
 		leftLeader.ConfigMotionCruiseVelocity(Constant::leftMotionVel, 0);
 		leftLeader.ConfigMotionAcceleration(Constant::leftMotionAcc, 0);
-		leftLeader.SetSensorPhase(true);
+		leftLeader.SetSensorPhase(false);
 		leftLeader.SetInverted(false);
 
+		leftFollower.ConfigNominalOutputForward(0, 0);
+		leftFollower.ConfigNominalOutputReverse(0, 0);
+		leftFollower.ConfigPeakOutputForward(1, 0);
+		leftFollower.ConfigPeakOutputReverse(-1, 0);
+		leftFollower.SetNeutralMode(ctre::phoenix::motorcontrol::NeutralMode::Brake);
 		leftFollower.ConfigMotionCruiseVelocity(Constant::leftMotionVel, 0);
 		leftFollower.ConfigMotionAcceleration(Constant::leftMotionAcc, 0);
-		leftFollower.SetSensorPhase(true);
+		leftFollower.SetSensorPhase(false);
 		leftFollower.SetInverted(false);
 
+
 		//Right motor setup
-		rightLeader.ConfigSelectedFeedbackSensor(ctre::phoenix::motorcontrol::FeedbackDevice::QuadEncoder,
-				Constant::pidChannel, 0);
+		rightLeader.ClearStickyFaults(0);
+		rightLeader.ConfigSelectedFeedbackSensor(ctre::phoenix::motorcontrol::FeedbackDevice::QuadEncoder, Constant::pidChannel, 0);
 		rightLeader.ConfigNominalOutputForward(0, 0);
 		rightLeader.ConfigNominalOutputReverse(0, 0);
 		rightLeader.ConfigPeakOutputForward(1, 0);
@@ -459,44 +490,56 @@ public:
 		rightLeader.SetSensorPhase(false);
 		rightLeader.SetInverted(true);
 
-		rightFollower.ConfigMotionCruiseVelocity(Constant::leftMotionVel, 0);
-		rightFollower.ConfigMotionAcceleration(Constant::leftMotionAcc, 0);
+		rightFollower.ConfigNominalOutputForward(0, 0);
+		rightFollower.ConfigNominalOutputReverse(0, 0);
+		rightFollower.ConfigPeakOutputForward(1, 0);
+		rightFollower.ConfigPeakOutputReverse(-1, 0);
+		rightFollower.SetNeutralMode(ctre::phoenix::motorcontrol::NeutralMode::Brake);
+		rightFollower.ConfigMotionCruiseVelocity(Constant::rightMotionVel, 0);
+		rightFollower.ConfigMotionAcceleration(Constant::rightMotionAcc, 0);
 		rightFollower.SetSensorPhase(false);
 		rightFollower.SetInverted(true);
 
 		// Set Left PID
 		// Values were tested using Web Interface
-		leftLeader.Config_kP(Constant::pidChannel, .5, 0);
-		leftLeader.Config_kI(Constant::pidChannel, .009, 0);
-		leftLeader.Config_kD(Constant::pidChannel, 13, 0);
-		leftLeader.Config_IntegralZone(Constant::pidChannel, 100, 0);
-		leftLeader.Config_kF(Constant::pidChannel, 0.514, 0);
+//		leftLeader.Config_kP(Constant::pidChannel, .5, 0);
+//		leftLeader.Config_kI(Constant::pidChannel, .009, 0);
+//		leftLeader.Config_kD(Constant::pidChannel, 13, 0);
+//		leftLeader.Config_IntegralZone(Constant::pidChannel, 100, 0);
+//
+//		rightLeader.Config_kP(Constant::pidChannel, .5, 0);
+//		rightLeader.Config_kI(Constant::pidChannel, .009, 0);
+//		rightLeader.Config_kD(Constant::pidChannel, 13, 0);
+//		rightLeader.Config_IntegralZone(Constant::pidChannel, 100, 0);
 
-		rightLeader.Config_kP(Constant::pidChannel, .5, 0);
-		rightLeader.Config_kI(Constant::pidChannel, .009, 0);
-		rightLeader.Config_kD(Constant::pidChannel, 13, 0);
-		rightLeader.Config_IntegralZone(Constant::pidChannel, 100, 0);
-		rightLeader.Config_kF(Constant::pidChannel, 0.514, 0);
+//		leftLeader.Config_kP(Constant::pidChannel, 0, 0);
+//		leftLeader.Config_kI(Constant::pidChannel, 0, 0);
+//		leftLeader.Config_kD(Constant::pidChannel, 0, 0);
+//		leftLeader.Config_IntegralZone(Constant::pidChannel, 0, 0);
+//
+//		rightLeader.Config_kP(Constant::pidChannel, 0, 0);
+//		rightLeader.Config_kI(Constant::pidChannel, 0, 0);
+//		rightLeader.Config_kD(Constant::pidChannel, 0, 0);
+//		rightLeader.Config_IntegralZone(Constant::pidChannel, 0, 0);
 
-		leftFollower.Set(ctre::phoenix::motorcontrol::ControlMode::Follower, 1);
-		rightFollower.Set(ctre::phoenix::motorcontrol::ControlMode::Follower, 4);
+		leftFollower.Set(ctre::phoenix::motorcontrol::ControlMode::Follower, Constant::LeftLeaderID);
+		rightFollower.Set(ctre::phoenix::motorcontrol::ControlMode::Follower, Constant::RightLeaderID);
 	}
 
 	void updateDashboard() {
-		frc::SmartDashboard::PutNumber("Left Enc Pos",
-				leftLeader.GetSelectedSensorPosition(Constant::Constant::pidChannel));
-		frc::SmartDashboard::PutNumber("Left Error", leftLeader.GetClosedLoopError(Constant::pidChannel));
+		frc::SmartDashboard::PutNumber("Left Enc Pos", leftLeader.GetSelectedSensorPosition(Constant::Constant::pidChannel));
+		//frc::SmartDashboard::PutNumber("Left Error", leftLeader.GetClosedLoopError(Constant::pidChannel));
 //		frc::SmartDashboard::PutNumber("Left Target", leftLeader.GetClosedLoopTarget(Constant::pidChannel));
 		frc::SmartDashboard::PutNumber("Left Enc Vel", leftLeader.GetSelectedSensorVelocity(Constant::pidChannel));
 
 		frc::SmartDashboard::PutNumber("Right Enc Pos", rightLeader.GetSelectedSensorPosition(Constant::pidChannel));
-		frc::SmartDashboard::PutNumber("Right Error", rightLeader.GetClosedLoopError(Constant::pidChannel));
+		//frc::SmartDashboard::PutNumber("Right Error", rightLeader.GetClosedLoopError(Constant::pidChannel));
 //		frc::SmartDashboard::PutNumber("Right Target", rightLeader.GetClosedLoopTarget(Constant::pidChannel));
 		frc::SmartDashboard::PutNumber("Right Enc Vel", rightLeader.GetSelectedSensorVelocity(Constant::pidChannel));
 
 
 		frc::SmartDashboard::PutNumber("Angle", gyro.GetYaw());
-		frc::SmartDashboard::PutString("Waiting to Zero", (waiting) ? "true" : "false");
+		frc::SmartDashboard::PutBoolean("Waiting to Zero", waiting);
 
 		switch (autonState) {
 			case START:
@@ -538,15 +581,15 @@ public:
 		else
 			frc::SmartDashboard::PutNumber("Auton Turn Command", -1);
 
-		frc::SmartDashboard::PutString("PIDIsOnTarget", (pidController.OnTarget()) ? "true" : "false");
+		frc::SmartDashboard::PutBoolean("PIDIsOnTarget", pidController.OnTarget());
 		frc::SmartDashboard::PutNumber("PIDTarget", pidController.GetSetpoint());
-		frc::SmartDashboard::PutString("IsEnabled", (pidController.IsEnabled()) ? "true" : "false");
-		frc::SmartDashboard::PutString("Turn Degrees Function", inTurnDegrees ? "true" : "false");
+		frc::SmartDashboard::PutBoolean("IsEnabled", pidController.IsEnabled());
+		frc::SmartDashboard::PutBoolean("Turn Degrees Function", inTurnDegrees);
 		frc::SmartDashboard::PutNumber("PIDError", pidController.GetError());
 
-//		frc::SmartDashboard::PutNumber("P Gain", pidController.GetP());
-//		frc::SmartDashboard::PutNumber("I Gain", pidController.GetI());
-//		frc::SmartDashboard::PutNumber("D Gain", pidController.GetD());
+		frc::SmartDashboard::PutNumber("P Gain", pidController.GetP());
+		frc::SmartDashboard::PutNumber("I Gain", pidController.GetI());
+		frc::SmartDashboard::PutNumber("D Gain", pidController.GetD());
 
 	}
 
@@ -593,7 +636,7 @@ private:
 #endif
 	PIDMotorOutput pidMotorOutput { &leftLeader, &rightLeader };
 	PIDGyroSource pidGyroSource { &gyro };
-	PIDController pidController { .025, 0, 0.015, &pidGyroSource, &pidMotorOutput, 0.02 };
+	PIDController pidController { .00602, 0, 0, &pidGyroSource, &pidMotorOutput, 0.02 };
 
 	double joyX;
 	double joyY;
@@ -610,6 +653,9 @@ private:
 	bool inTurnDegrees = false;
 	unsigned int traverseStep = 0;
 	AHRS gyro { I2C::Port::kMXP };
+
+	ctre::phoenix::motorcontrol::StickyFaults leftFaults;
+	ctre::phoenix::motorcontrol::StickyFaults rightFaults;
 
 	std::string colorSides;
 };
