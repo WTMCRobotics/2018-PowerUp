@@ -26,7 +26,7 @@ public:
 	static constexpr double arcadeDriveDeadbandVal = .2;
 
 	// Target Calculation = (inches / Constant::circumference) * Constant::pulsesPerRotationQuad
-	static const int autonPositionDeadbandVal = 300;
+	static const int autonPositionDeadbandVal = 500;
 
 	static constexpr double leftMotionVel = 5150;
 	static constexpr double leftMotionAcc = 5150 / 2;

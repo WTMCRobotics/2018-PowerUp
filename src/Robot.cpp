@@ -26,11 +26,16 @@
 //#define JOYSTICK
 #define XBOX
 
+const int SMALL = 111;
+const int MEDIUM = 222;
+const int LARGE = 333;
+
+
 enum driveMode {
 	ARCADE, TANK
 };
 enum autonStates {
-	START, TRAVERSE, DROP, WAIT
+	START, TRAVERSE, DROP, TO_CUBE_INIT, TO_CUBE_TRAVERSE, TO_SCALE_INIT, TO_SCALE_TRAVERSE, DROP_SECOND, WAIT
 } autonState;
 
 enum traverseStates {
@@ -55,6 +60,11 @@ public:
 
 		// Start traverse step at the beginning
 		traverseStep = 0;
+
+		scaleDone = false;
+		noDrop = false;
+
+		turnPID = SMALL;
 
 		// Reset the gyroscope
 //		gyro.Reset();
@@ -94,7 +104,11 @@ public:
 		// Get the color sides from field
 		colorSides = frc::DriverStation::GetInstance().GetGameSpecificMessage();
 
-		pidController.SetSetpoint(0);
+		switch (turnPID) {
+			case SMALL: pidSmallAngle.SetSetpoint(0); break;
+			case MEDIUM: pidMediumAngle.SetSetpoint(0); break;
+			case LARGE: pidLargeAngle.SetSetpoint(0); break;
+		}
 
 		// Get the auton mode from dashboard
 		m_autoSelected = m_chooser.GetSelected();
@@ -104,64 +118,139 @@ public:
 			// Lined up in the middle
 			// if switch is on the left
 			if (colorSides[0] == 'L') {
-				moveVector.push_back(10);
-				turnVector.push_back(-23.38);
 
-				moveVector.push_back(130.73);
+				// Drop Switch Left
+				moveVector.push_back(10);
+				turnVector.push_back(-45);
+
+				moveVector.push_back(80.787);
 				turnVector.push_back(0);
 
-				moveVector.push_back(10);
+				moveVector.push_back(34.065);
 				turnVector.push_back(181);			// Don't turn
 			} // END of if switch is on the left
 			  // else if the switch is on the right
-			else {
-				moveVector.push_back(10);
-				turnVector.push_back(23.38);
+			else if(colorSides[0] == 'R') {
 
-				moveVector.push_back(130.73);
+				// Drop Switch Right
+				moveVector.push_back(10);
+				turnVector.push_back(45);
+
+				moveVector.push_back(73.362);
 				turnVector.push_back(0);
 
-				moveVector.push_back(10);
+				moveVector.push_back(39.315);
 				turnVector.push_back(181);			// Don't turn
 			} // END of else the switch is on the right
+			else
+			{
+				noDrop = true;
+			}
 		}
 		// Lined up on the left
 		else if (m_autoSelected == autoLeft) {
-			if(colorSides[0] == 'L'){
-				moveVector.push_back(168);
+			if(colorSides[0] == 'L') {
+
+				// Drop Switch Side
+				moveVector.push_back(148.595);
 				turnVector.push_back(90);
+				moveVector.push_back(18.905);
+				turnVector.push_back(181);
+			}
+			else if(colorSides[1] == 'L') {
+
+				// Drop Scale
+				moveVector.push_back(275.02);
+				turnVector.push_back(45);
+				moveVector.push_back(15.427);
+				turnVector.push_back(181); // Don't turn
+
+				scaleDone = true;
+			}
+			else
+			{
+				// Cross Line
+				moveVector.push_back(130);
+				turnVector.push_back(181);
+
+				noDrop = true;
 			}
 		}
 		// Lined up on the right
 		else if (m_autoSelected == autoRight) {
-			if(colorSides[0] == 'R'){
-				moveVector.push_back(168);
+			if(colorSides[0] == 'R') {
+
+				// Drop Switch Side
+				moveVector.push_back(148.595);
 				turnVector.push_back(-90);
+				moveVector.push_back(18.905);
+				turnVector.push_back(181);
+			}
+			else if(colorSides[1] == 'R') {
+
+				// Drop Scale
+				moveVector.push_back(275.02);
+				turnVector.push_back(-45);
+				moveVector.push_back(15.427);
+				turnVector.push_back(181); // Don't turn
+
+				scaleDone = true;
+			}
+			else
+			{
+				// Cross Line
+				moveVector.push_back(130);
+				turnVector.push_back(181);
+
+				noDrop = true;
 			}
 		}
 		// Default auto
 		else if (m_autoSelected == autoDefault) {
 //			moveVector.push_back(130);
 //			turnVector.push_back(0);
-			moveVector.push_back(150);
-			turnVector.push_back(179.99999999999);
-			moveVector.push_back(150);
+			moveVector.push_back(100);
 			turnVector.push_back(0);
+
+			moveVector.push_back(0);
+			turnVector.push_back(45);
+
+			moveVector.push_back(5);
+			turnVector.push_back(181);
+
+
+			//moveVector.push_back(150);
+			//turnVector.push_back(0);
+
+			noDrop = true;
 		} else {
 			moveVector.push_back(130);
 			turnVector.push_back(0);
+
+			noDrop = true;
 		} // END of switch that outlines traverse path
 
 		leftLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
 		rightLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
 
-		pidController.SetInputRange(-180, 180);
-		pidController.SetOutputRange(-0.3, 0.3);
-		pidController.SetContinuous(true);
-		pidController.SetAbsoluteTolerance(1);
+		pidSmallAngle.SetInputRange(-180, 180);
+		pidSmallAngle.SetOutputRange(-0.25, 0.25);
+		pidSmallAngle.SetContinuous(true);
+		pidSmallAngle.SetAbsoluteTolerance(2);
+
+		pidMediumAngle.SetInputRange(-180, 180);
+		pidMediumAngle.SetOutputRange(-0.25, 0.25);
+		pidMediumAngle.SetContinuous(true);
+		pidMediumAngle.SetAbsoluteTolerance(2);
+
+		pidLargeAngle.SetInputRange(-180, 180);
+		pidLargeAngle.SetOutputRange(-0.25, 0.25);
+		pidLargeAngle.SetContinuous(true);
+		pidLargeAngle.SetAbsoluteTolerance(2);
+
 
 		gyro.ZeroYaw();
-		//pidController.SetPID(0.1, 0.0, 0.0);
+		//pidMediumAngle.SetPID(0.1, 0.0, 0.0);
 		updateDashboard();
 	} // END of AutonomousInit()
 
@@ -178,10 +267,20 @@ public:
 				// Set the traverse step to 0
 				traverseStep = 0;
 
-				// Disable PID
-				if (pidController.IsEnabled()) {
-					pidController.Disable();
-				} // END of disabling PID
+				switch (turnPID) {
+					case SMALL: if (pidSmallAngle.IsEnabled()) {
+									pidSmallAngle.Disable();
+								}
+								break;
+				   case MEDIUM: if (pidMediumAngle.IsEnabled()) {
+									pidMediumAngle.Disable();
+								}
+								break;
+					case LARGE: if (pidLargeAngle.IsEnabled()) {
+									pidLargeAngle.Disable();
+								}
+								break;
+				}
 				break;
 			case TRAVERSE:
 				updateDashboard();
@@ -189,7 +288,7 @@ public:
 				// if traverse is DONE
 				if (traverseState == DONE) {
 					// if auto selected is default
-					if (m_autoSelected == autoDefault)
+					if (noDrop)
 						// Skip drop
 						autonState = WAIT;
 					// else not default auton
@@ -199,11 +298,99 @@ public:
 
 					leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
 					rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
+
 					moveVector.clear();
 					turnVector.clear();
+
+
 				} // END of if traverse is DONE
 				break;
 			case DROP:
+				traverseState = MOVE;
+				autonState = TO_CUBE_INIT;
+				break;
+			case TO_CUBE_INIT:
+				if(!scaleDone && colorSides[1] == 'L' && m_autoSelected == autoLeft)
+				{
+					moveVector.push_back(-8.595);
+					turnVector.push_back(0);
+					moveVector.push_back(69);
+					turnVector.push_back(135);
+					moveVector.push_back(20.193);
+					turnVector.push_back(181);		// Don't turn
+				}
+				else if(!scaleDone && colorSides[1] == 'R' && m_autoSelected == autoRight)
+				{
+					moveVector.push_back(-8.595);
+					turnVector.push_back(0);
+					moveVector.push_back(69);
+					turnVector.push_back(-135);
+					moveVector.push_back(20.193);
+					turnVector.push_back(181);		// Don't turn
+				}
+
+				autonState = TO_CUBE_TRAVERSE;
+				break;
+			case TO_CUBE_TRAVERSE:
+				updateDashboard();
+				if(moveVector.empty())
+				{
+					autonState = WAIT;
+					break;
+				}
+				traverse();
+				// if traverse is DONE
+				if (traverseState == DONE) {
+					// Move to drop
+					autonState = TO_SCALE_INIT;
+
+					leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
+					rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
+					moveVector.clear();
+					turnVector.clear();
+
+					traverseState = MOVE;
+				} // END of if traverse is DONE
+				break;
+			case TO_SCALE_INIT:
+				if(m_autoSelected == autoLeft)
+				{
+					moveVector.push_back(-54.368);
+					turnVector.push_back(45);
+					moveVector.push_back(35.021);
+					turnVector.push_back(181);		// Don't turn
+				}
+				else if(m_autoSelected == autoRight)
+				{
+					moveVector.push_back(-54.368);
+					turnVector.push_back(-45);
+					moveVector.push_back(35.021);
+					turnVector.push_back(181);		// Don't turn
+				}
+				break;
+			case TO_SCALE_TRAVERSE:
+				updateDashboard();
+				if(moveVector.empty())
+				{
+					autonState = WAIT;
+					break;
+				}
+				traverse();
+				// if traverse is DONE
+				if (traverseState == DONE) {
+					// Move to drop
+					autonState = DROP_SECOND;
+
+					leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
+					rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
+					moveVector.clear();
+					turnVector.clear();
+
+
+				} // END of if traverse is DONE
+				break;
+			case DROP_SECOND:
+				traverseState = MOVE;
 				break;
 			case WAIT:
 				break;
@@ -216,7 +403,14 @@ public:
 		leftLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
 		rightLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
 
-		pidController.Disable();
+		switch (turnPID) {
+			case SMALL:	pidSmallAngle.Disable();
+						break;
+		   case MEDIUM:	pidMediumAngle.Disable();
+						break;
+			case LARGE:	pidLargeAngle.Disable();
+						break;
+		}
 
 		gyro.Reset();
 		gyro.ZeroYaw();
@@ -235,7 +429,8 @@ public:
 					updateDashboard();
 					leftLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
 					rightLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
-					rightLeader.SetInverted(true);
+					leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
+					rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
 					updateDashboard();
 //					while (gyro.IsCalibrating()) {
 //						Wait(0.005);
@@ -250,7 +445,23 @@ public:
 //						updateDashboard();
 //					}
 //					waiting = false;
-					pidController.Enable();
+					if((turnVector[traverseStep] <= 45 && turnVector[traverseStep] >= 0)
+							|| (turnVector[traverseStep] >= -45 && turnVector[traverseStep] <= 0))
+					{
+						turnPID = SMALL;
+						pidSmallAngle.Enable();
+					}
+					else if((turnVector[traverseStep] <= 110 && turnVector[traverseStep] > 45)
+							|| (turnVector[traverseStep] >= -110 && turnVector[traverseStep] < -45))
+					{
+						turnPID = MEDIUM;
+							pidMediumAngle.Enable();
+					}
+					else {
+						turnPID = LARGE;
+						pidLargeAngle.Enable();
+					}
+
 					inTurnDegrees = false;
 				}
 				break;
@@ -279,6 +490,12 @@ public:
 				//				}
 				//				break;
 			case NEXT:
+				for(unsigned int i = 0; i < moveVector.size(); i++)
+				{
+					std::cout << "Move: " << moveVector[i] << std::endl;
+					std::cout << "Turn: " << turnVector[i] << std::endl;
+				}
+
 				if (traverseStep + 1 < moveVector.size()) {
 					leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
 					rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
@@ -291,8 +508,14 @@ public:
 					rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
 					leftLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
 					rightLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
-					if (pidController.IsEnabled()) {
-						pidController.Disable();
+					if (pidSmallAngle.IsEnabled()) {
+						pidSmallAngle.Disable();
+					}
+					if (pidMediumAngle.IsEnabled()) {
+						pidMediumAngle.Disable();
+					}
+					if (pidLargeAngle.IsEnabled()) {
+						pidLargeAngle.Disable();
 					}
 					traverseState = DONE;
 				}
@@ -305,27 +528,52 @@ public:
 
 	bool turnDegrees(double degrees) {
 
-//		if (!(pidController.IsEnabled())) {
+//		if (!(pidSmallAngle.IsEnabled())) {
 //			gyro.ZeroYaw();
 //			while(!(gyro.GetYaw() < 0.01 && gyro.GetYaw() > -.01)) {waiting = true;}
 //			waiting = false;
-//			pidController.Enable();
-//			pidController.SetSetpoint(degrees);
+//			pidSmallAngle.Enable();
+//			pidSmallAngle.SetSetpoint(degrees);
 //			return false;
 		//} else {
 		inTurnDegrees = true;
 		updateDashboard();
-		if(pidController.GetSetpoint() != degrees)
-			pidController.SetSetpoint(degrees);
+		switch (turnPID) {
+			case SMALL: if(pidSmallAngle.GetSetpoint() != degrees)
+							pidSmallAngle.SetSetpoint(degrees);
+						break;
+			case MEDIUM: if(pidMediumAngle.GetSetpoint() != degrees)
+							pidMediumAngle.SetSetpoint(degrees);
+						break;
+			case LARGE: if(pidLargeAngle.GetSetpoint() != degrees)
+							pidLargeAngle.SetSetpoint(degrees);
+						break;
+		}
+
 
 		updateDashboard();
 
-		if (pidController.OnTarget()) {
-			pidController.Disable();
+		if (pidMediumAngle.IsEnabled() && pidMediumAngle.OnTarget()) {
+			pidMediumAngle.Disable();
 			inTurnDegrees = false;
 			updateDashboard();
 			return true;
-		} else {
+		}
+		else if(pidSmallAngle.IsEnabled() && pidSmallAngle.OnTarget())
+		{
+			pidSmallAngle.Disable();
+			inTurnDegrees = false;
+			updateDashboard();
+			return true;
+		}
+		else if(pidLargeAngle.IsEnabled() && pidLargeAngle.OnTarget())
+		{
+			pidLargeAngle.Disable();
+			inTurnDegrees = false;
+			updateDashboard();
+			return true;
+		}
+		else {
 			inTurnDegrees = false;
 			updateDashboard();
 			return false;
@@ -358,15 +606,26 @@ public:
 		leftjoyY = joystick1.GetY();
 		rightjoyY = joystick2.GetY();
 #elif defined(XBOX)
-		leftjoyY = xboxController.GetY(frc::GenericHID::JoystickHand::kLeftHand);
-		rightjoyY = xboxController.GetY(frc::GenericHID::JoystickHand::kRightHand);
+		//If both triggers pressed
+		if(!(xboxController.GetTriggerAxis(frc::GenericHID::JoystickHand::kRightHand) >0.1)  && !(xboxController.GetTriggerAxis(frc::GenericHID::JoystickHand::kLeftHand))) {
+			//Arcade drive with right stick
+			rightjoyY = xboxController.GetY(frc::GenericHID::JoystickHand::kRightHand);
+			rightjoyX = xboxController.GetX(frc::GenericHID::JoystickHand::kRightHand);
+		} else {
+			//Tank drive both stick
+			leftjoyY = xboxController.GetY(frc::GenericHID::JoystickHand::kLeftHand);
+			rightjoyY = xboxController.GetY(frc::GenericHID::JoystickHand::kRightHand);
+		}
 
+		//If right trigger pressed
 		if((xboxController.GetTriggerAxis(frc::GenericHID::JoystickHand::kRightHand) >0.1)  && !(xboxController.GetTriggerAxis(frc::GenericHID::JoystickHand::kLeftHand))) {
+			//Kinda slow down
 			leftjoyY = leftjoyY / 1.5;
 			rightjoyY = rightjoyY / 1.5;
 		}
-
+		//If both triggers pressed
 		if((xboxController.GetTriggerAxis(frc::GenericHID::JoystickHand::kLeftHand)) >0.1 && (xboxController.GetTriggerAxis(frc::GenericHID::JoystickHand::kRightHand) >0.1)) {
+			//Really slow down
 			leftjoyY = leftjoyY / 3;
 			rightjoyY = rightjoyY / 3;
 		}
@@ -380,7 +639,9 @@ public:
 		if (mode == driveMode::ARCADE) {
 
 			UpdateJoystickArcade();
+			//If Z axis is moved and X and Y are not
 			if (ArcadeDriveDeadband(joyZ) != 0 && TankDriveDeadband(joyY) == 0 && TankDriveDeadband(joyX) == 0) {
+				//Spin robot on a dime
 				if (joyZ > 0) {
 					leftTarget = -joyZ;
 					rightTarget = joyZ;
@@ -388,28 +649,47 @@ public:
 					leftTarget = -joyZ;
 					rightTarget = joyZ;
 				}
+			//if Y is less than 0
 			} else if (ArcadeDriveDeadband(joyY) <= 0) {
+				//Make it so that if it is pulled back and to the left, it goes back and to the left
 				leftTarget = TankDriveDeadband(joyY + joyX);
 				rightTarget = TankDriveDeadband(joyY - joyX);
 			}
-
+			//If Y is greater than 0
 			else {
+				//Make it so that if it is pushed forward and to the right, it goes forward and to the right
 				leftTarget = TankDriveDeadband(joyY - joyX);
 				rightTarget = TankDriveDeadband(joyY + joyX);
 			}
 		} else {
 			UpdateJoystickTank();
-			leftTarget = TankDriveDeadband(leftjoyY);
-			rightTarget = TankDriveDeadband(rightjoyY);
-		}
 
+			//If neither triggers are pressed
+			if (!(xboxController.GetTriggerAxis(frc::GenericHID::JoystickHand::kRightHand) >0.1)  && !(xboxController.GetTriggerAxis(frc::GenericHID::JoystickHand::kLeftHand))) {
+				//if Y is less than 0
+				if (ArcadeDriveDeadband(rightjoyY) <= 0) {
+					//Make it so that if it is pulled back and to the left, it goes back and to the left
+					leftTarget = TankDriveDeadband(rightjoyY - rightjoyX);
+					rightTarget = TankDriveDeadband(rightjoyY + rightjoyX);
+				} else { //If Y is greater than 0
+					//Make it so that if it is pushed forward and to the right, it goes forward and to the right
+					leftTarget = TankDriveDeadband(rightjoyY + rightjoyX);
+					rightTarget = TankDriveDeadband(rightjoyY - rightjoyX);
+				}
+
+			} else { //Do normal tank drive
+				leftTarget = TankDriveDeadband(leftjoyY);
+				rightTarget = TankDriveDeadband(rightjoyY);
+			}
+		}
+		//Square the absolute value of the left for ramping purposes
 		if (leftTarget < 0) {
 			leftTarget *= leftTarget;
 			leftTarget = -leftTarget;
 		} else {
 			leftTarget *= leftTarget;
 		}
-
+		//Square the absolute value of the right for ramping purposes
 		if (rightTarget < 0) {
 			rightTarget *= rightTarget;
 			rightTarget = -rightTarget;
@@ -512,12 +792,12 @@ public:
 //		rightLeader.Config_kD(Constant::pidChannel, 13, 0);
 //		rightLeader.Config_IntegralZone(Constant::pidChannel, 100, 0);
 
-//		leftLeader.Config_kP(Constant::pidChannel, 0, 0);
+//		leftLeader.Config_kP(Constant::pidChannel, .09, 0);
 //		leftLeader.Config_kI(Constant::pidChannel, 0, 0);
 //		leftLeader.Config_kD(Constant::pidChannel, 0, 0);
 //		leftLeader.Config_IntegralZone(Constant::pidChannel, 0, 0);
 //
-//		rightLeader.Config_kP(Constant::pidChannel, 0, 0);
+//		rightLeader.Config_kP(Constant::pidChannel, .09, 0);
 //		rightLeader.Config_kI(Constant::pidChannel, 0, 0);
 //		rightLeader.Config_kD(Constant::pidChannel, 0, 0);
 //		rightLeader.Config_IntegralZone(Constant::pidChannel, 0, 0);
@@ -528,12 +808,12 @@ public:
 
 	void updateDashboard() {
 		frc::SmartDashboard::PutNumber("Left Enc Pos", leftLeader.GetSelectedSensorPosition(Constant::Constant::pidChannel));
-		//frc::SmartDashboard::PutNumber("Left Error", leftLeader.GetClosedLoopError(Constant::pidChannel));
+		frc::SmartDashboard::PutNumber("Left Error", leftLeader.GetClosedLoopError(Constant::pidChannel));
 //		frc::SmartDashboard::PutNumber("Left Target", leftLeader.GetClosedLoopTarget(Constant::pidChannel));
 		frc::SmartDashboard::PutNumber("Left Enc Vel", leftLeader.GetSelectedSensorVelocity(Constant::pidChannel));
 
 		frc::SmartDashboard::PutNumber("Right Enc Pos", rightLeader.GetSelectedSensorPosition(Constant::pidChannel));
-		//frc::SmartDashboard::PutNumber("Right Error", rightLeader.GetClosedLoopError(Constant::pidChannel));
+		frc::SmartDashboard::PutNumber("Right Error", rightLeader.GetClosedLoopError(Constant::pidChannel));
 //		frc::SmartDashboard::PutNumber("Right Target", rightLeader.GetClosedLoopTarget(Constant::pidChannel));
 		frc::SmartDashboard::PutNumber("Right Enc Vel", rightLeader.GetSelectedSensorVelocity(Constant::pidChannel));
 
@@ -549,7 +829,22 @@ public:
 				frc::SmartDashboard::PutString("Auton State", "Traverse");
 				break;
 			case DROP:
-				frc::SmartDashboard::PutString("Auton State", "Drop");
+				frc::SmartDashboard::PutString("Auton State", "1st Drop");
+				break;
+			case TO_CUBE_INIT:
+				frc::SmartDashboard::PutString("Auton State", "Cube Init");
+				break;
+			case TO_CUBE_TRAVERSE:
+				frc::SmartDashboard::PutString("Auton State", "Cube Traverse");
+				break;
+			case TO_SCALE_INIT:
+				frc::SmartDashboard::PutString("Auton State", "Scale Init");
+				break;
+			case TO_SCALE_TRAVERSE:
+				frc::SmartDashboard::PutString("Auton State", "Scale Traverse");
+				break;
+			case DROP_SECOND:
+				frc::SmartDashboard::PutString("Auton State", "2nd Drop");
 				break;
 			case WAIT:
 				frc::SmartDashboard::PutString("Auton State", "Wait");
@@ -581,16 +876,63 @@ public:
 		else
 			frc::SmartDashboard::PutNumber("Auton Turn Command", -1);
 
-		frc::SmartDashboard::PutBoolean("PIDIsOnTarget", pidController.OnTarget());
-		frc::SmartDashboard::PutNumber("PIDTarget", pidController.GetSetpoint());
-		frc::SmartDashboard::PutBoolean("IsEnabled", pidController.IsEnabled());
-		frc::SmartDashboard::PutBoolean("Turn Degrees Function", inTurnDegrees);
-		frc::SmartDashboard::PutNumber("PIDError", pidController.GetError());
+		switch (turnPID) {
+			case SMALL: frc::SmartDashboard::PutBoolean("PIDIsOnTarget", pidSmallAngle.OnTarget());
+						frc::SmartDashboard::PutNumber("PIDTarget", pidSmallAngle.GetSetpoint());
+						frc::SmartDashboard::PutBoolean("IsEnabled", pidSmallAngle.IsEnabled());
+						frc::SmartDashboard::PutBoolean("Turn Degrees Function", inTurnDegrees);
+						frc::SmartDashboard::PutNumber("PIDError", pidSmallAngle.GetError());
+						break;
+			case MEDIUM: frc::SmartDashboard::PutBoolean("PIDIsOnTarget", pidMediumAngle.OnTarget());
+						 frc::SmartDashboard::PutNumber("PIDTarget", pidMediumAngle.GetSetpoint());
+						 frc::SmartDashboard::PutBoolean("IsEnabled", pidMediumAngle.IsEnabled());
+						 frc::SmartDashboard::PutBoolean("Turn Degrees Function", inTurnDegrees);
+						 frc::SmartDashboard::PutNumber("PIDError", pidMediumAngle.GetError());
+						 break;
+			case LARGE:  frc::SmartDashboard::PutBoolean("PIDIsOnTarget", pidLargeAngle.OnTarget());
+						 frc::SmartDashboard::PutNumber("PIDTarget", pidLargeAngle.GetSetpoint());
+						 frc::SmartDashboard::PutBoolean("IsEnabled", pidLargeAngle.IsEnabled());
+						 frc::SmartDashboard::PutBoolean("Turn Degrees Function", inTurnDegrees);
+						 frc::SmartDashboard::PutNumber("PIDError", pidLargeAngle.GetError());
+						 break;
+		}
 
-		frc::SmartDashboard::PutNumber("P Gain", pidController.GetP());
-		frc::SmartDashboard::PutNumber("I Gain", pidController.GetI());
-		frc::SmartDashboard::PutNumber("D Gain", pidController.GetD());
+		if(pidMediumAngle.IsEnabled())
+		{
+			frc::SmartDashboard::PutBoolean("Medium PID", true);
+			frc::SmartDashboard::PutNumber("P Gain", pidMediumAngle.GetP());
+			frc::SmartDashboard::PutNumber("I Gain", pidMediumAngle.GetI());
+			frc::SmartDashboard::PutNumber("D Gain", pidMediumAngle.GetD());
+		}
+		else
+			frc::SmartDashboard::PutBoolean("Medium PID", false);
 
+		if(pidSmallAngle.IsEnabled())
+		{
+			frc::SmartDashboard::PutBoolean("Small PID", true);
+			frc::SmartDashboard::PutNumber("P Gain", pidSmallAngle.GetP());
+			frc::SmartDashboard::PutNumber("I Gain", pidSmallAngle.GetI());
+			frc::SmartDashboard::PutNumber("D Gain", pidSmallAngle.GetD());
+		}
+		else
+			frc::SmartDashboard::PutBoolean("Small PID", false);
+
+		if(pidLargeAngle.IsEnabled())
+		{
+			frc::SmartDashboard::PutBoolean("Large PID", true);
+			frc::SmartDashboard::PutNumber("P Gain", pidLargeAngle.GetP());
+			frc::SmartDashboard::PutNumber("I Gain", pidLargeAngle.GetI());
+			frc::SmartDashboard::PutNumber("D Gain", pidLargeAngle.GetD());
+		}
+		else
+			frc::SmartDashboard::PutBoolean("Large PID", false);
+
+		if(!pidMediumAngle.IsEnabled() && !pidSmallAngle.IsEnabled() && !pidSmallAngle.IsEnabled())
+		{
+			frc::SmartDashboard::PutNumber("P Gain", -1);
+			frc::SmartDashboard::PutNumber("I Gain", -1);
+			frc::SmartDashboard::PutNumber("D Gain", -1);
+		}
 	}
 
 	bool AutonPositionDeadband(double value, int target) {
@@ -626,6 +968,9 @@ private:
 	std::vector<double> moveVector;
 	std::vector<double> turnVector;
 
+	bool scaleDone = false;
+	bool noDrop = false;
+
 	TalonSRX leftLeader { Constant::LeftLeaderID };
 	TalonSRX leftFollower { Constant::LeftFollowerID };
 	TalonSRX rightLeader { Constant::RightLeaderID };
@@ -636,13 +981,18 @@ private:
 #endif
 	PIDMotorOutput pidMotorOutput { &leftLeader, &rightLeader };
 	PIDGyroSource pidGyroSource { &gyro };
-	PIDController pidController { .00602, 0, 0, &pidGyroSource, &pidMotorOutput, 0.02 };
+	PIDController pidSmallAngle { .0125, 0, 0.01, &pidGyroSource, &pidMotorOutput, 0.02 };  //trying for 45 degrees
+//	PIDController pidSmallAngle { .00822, 0, 0, &pidGyroSource, &pidMotorOutput, 0.02 };
+	PIDController pidMediumAngle { .01094, 0, 0.01, &pidGyroSource, &pidMotorOutput, 0.02 }; //trying for 90 degrees
+	PIDController pidLargeAngle { .004, 0, 0.02, &pidGyroSource, &pidMotorOutput, 0.02 }; //trying for 135 degrees
+	//PIDController pidController { .00602, 0, 0, &pidGyroSource, &pidMotorOutput, 0.02 };
 
 	double joyX;
 	double joyY;
 	double joyZ;
 	double leftjoyY;
 	double rightjoyY;
+	double rightjoyX;
 #if defined(XBOX)
 	XboxController xboxController{0};
 #endif
@@ -652,6 +1002,7 @@ private:
 	bool waiting;
 	bool inTurnDegrees = false;
 	unsigned int traverseStep = 0;
+	int turnPID = MEDIUM;
 	AHRS gyro { I2C::Port::kMXP };
 
 	ctre::phoenix::motorcontrol::StickyFaults leftFaults;
