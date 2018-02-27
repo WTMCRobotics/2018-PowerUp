@@ -15,6 +15,7 @@
 #include <SmartDashboard/SmartDashboard.h>
 #include <TimedRobot.h>
 #include <ctre/Phoenix.h>
+#include <VictorSP.h>
 #include <Joystick.h>
 #include <AHRS.h>
 #include "Constant.h"
@@ -22,14 +23,21 @@
 #include "PIDGyroSource.h"
 #include "PIDController.h"
 #include <SerialPort.h>
+#include <DoubleSolenoid.h>
+#include <Compressor.h>
+#include <Timer.h>
 
-//#define JOYSTICK
-#define XBOX
+#define JOYSTICK_CODRIVER
+//#define GUITAR_CODRIVER
 
-const int SMALL = 111;
-const int MEDIUM = 222;
-const int LARGE = 333;
+#define I2C_SLAVE_ADR 0x08 // ADXL345 I2C device address
 
+//#define JOYSTICK_DRIVER
+#define XBOX_DRIVER
+
+enum angleMode{
+	SMALL, MEDIUM, LARGE
+};
 
 enum driveMode {
 	ARCADE, TANK
@@ -46,7 +54,7 @@ class Robot: public frc::TimedRobot {
 public:
 	void RobotInit() {
 
-		SetupMotor();
+		setupMotor();
 		// Auton Chooser
 		m_chooser.AddDefault(autoDefault, autoDefault);
 		m_chooser.AddObject(autoMiddle, autoMiddle);
@@ -54,9 +62,18 @@ public:
 		m_chooser.AddObject(autoRight, autoRight);
 		frc::SmartDashboard::PutData("Auto Modes", &m_chooser);
 
-		// Stop Motors
+		I2Channel = new I2C(I2C::kOnboard, I2C_SLAVE_ADR);
+
+		// Reset Encoders
 		leftLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
 		rightLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
+		liftLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
+		lastLiftPosition = 0;
+
+		// Stop Motors
+		leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
+		rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
+		liftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
 
 		// Start traverse step at the beginning
 		traverseStep = 0;
@@ -72,12 +89,20 @@ public:
 		while(!(gyro.GetYaw() < 0.01 && gyro.GetYaw() > -.01)) {waiting = true;}
 		waiting = false;
 
+		secondsElapsed = 0;
+		timerOverride = false;
+		timer.Reset();
+
 		// Update dashboard
 		updateDashboard();
 
 		// Start at the beginning of auton
 		autonState = START;
 	} // END of RobotInit()
+
+	void I2CWrite(int data){
+		I2Channel->Write(I2C_SLAVE_ADR, data);
+	}
 
 	/*
 	 * This autonomous (along with the chooser code above) shows how to
@@ -100,9 +125,24 @@ public:
 	void AutonomousInit() override {
 		// Start at the beginning of auton
 		autonState = START;
+		timer.Start();
 
 		// Get the color sides from field
+		secondsElapsed = timer.Get();
 		colorSides = frc::DriverStation::GetInstance().GetGameSpecificMessage();
+		while(colorSides.length() < 2 && secondsElapsed < 5)
+		{
+			colorSides = frc::DriverStation::GetInstance().GetGameSpecificMessage();
+			secondsElapsed = timer.Get();
+		}
+
+		timer.Stop();
+		if(colorSides.length() < 2)
+		{
+			timerOverride = true;
+		} else {
+			timerOverride = false;
+		}
 
 		switch (turnPID) {
 			case SMALL: pidSmallAngle.SetSetpoint(0); break;
@@ -248,6 +288,10 @@ public:
 		pidLargeAngle.SetContinuous(true);
 		pidLargeAngle.SetAbsoluteTolerance(2);
 
+		// Reset Encoders
+		leftLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
+		rightLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
+		liftLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
 
 		gyro.ZeroYaw();
 		//pidMediumAngle.SetPID(0.1, 0.0, 0.0);
@@ -255,6 +299,7 @@ public:
 	} // END of AutonomousInit()
 
 	void AutonomousPeriodic() {
+		updateCompressor();
 		switch (autonState) {
 			case START:
 				// Stop Motors
@@ -270,32 +315,29 @@ public:
 				switch (turnPID) {
 					case SMALL: if (pidSmallAngle.IsEnabled()) {
 									pidSmallAngle.Disable();
-								}
-								break;
+								} break;
 				   case MEDIUM: if (pidMediumAngle.IsEnabled()) {
 									pidMediumAngle.Disable();
-								}
-								break;
+								} break;
 					case LARGE: if (pidLargeAngle.IsEnabled()) {
 									pidLargeAngle.Disable();
-								}
-								break;
-				}
-				break;
+								} break;
+				} break;
 			case TRAVERSE:
 				updateDashboard();
 				traverse();
 				// if traverse is DONE
 				if (traverseState == DONE) {
 					// if auto selected is default
-					if (noDrop)
+					if (noDrop) {
 						// Skip drop
 						autonState = WAIT;
+					}
 					// else not default auton
-					else
+					else {
 						// Move to drop
 						autonState = DROP;
-
+					}
 					leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
 					rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
 
@@ -385,8 +427,6 @@ public:
 					rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
 					moveVector.clear();
 					turnVector.clear();
-
-
 				} // END of if traverse is DONE
 				break;
 			case DROP_SECOND:
@@ -399,17 +439,24 @@ public:
 	} // END of AutonomousPeriodic()
 
 	void TeleopInit() {
+		// Stop Motors
+		leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
+		rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
+		liftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
 
+		// Reset Encoders
 		leftLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
 		rightLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
+		liftLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
+		lastLiftPosition = 0;
 
 		switch (turnPID) {
-			case SMALL:	pidSmallAngle.Disable();
-						break;
-		   case MEDIUM:	pidMediumAngle.Disable();
-						break;
-			case LARGE:	pidLargeAngle.Disable();
-						break;
+			case SMALL:	 pidSmallAngle.Disable();
+						 break;
+		    case MEDIUM: pidMediumAngle.Disable();
+						 break;
+			case LARGE:	 pidLargeAngle.Disable();
+						 break;
 		}
 
 		gyro.Reset();
@@ -432,19 +479,19 @@ public:
 					leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
 					rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
 					updateDashboard();
-//					while (gyro.IsCalibrating()) {
-//						Wait(0.005);
-//						moving = true;
-//						updateDashboard();
-//					}
-//					moving = false;
-//					gyro.ZeroYaw();
-//					while (!(gyro.GetYaw() < 0.15 && gyro.GetYaw() > -.15)) {
-//						Wait(0.005);
-//						waiting = true;
-//						updateDashboard();
-//					}
-//					waiting = false;
+//								while (gyro.IsCalibrating()) {
+//									Wait(0.005);
+//									moving = true;
+//									updateDashboard();
+//								}
+//								moving = false;
+//								gyro.ZeroYaw();
+//								while (!(gyro.GetYaw() < 0.15 && gyro.GetYaw() > -.15)) {
+//									Wait(0.005);
+//									waiting = true;
+//									updateDashboard();
+//								}
+//								waiting = false;
 					if((turnVector[traverseStep] <= 45 && turnVector[traverseStep] >= 0)
 							|| (turnVector[traverseStep] >= -45 && turnVector[traverseStep] <= 0))
 					{
@@ -528,14 +575,14 @@ public:
 
 	bool turnDegrees(double degrees) {
 
-//		if (!(pidSmallAngle.IsEnabled())) {
-//			gyro.ZeroYaw();
-//			while(!(gyro.GetYaw() < 0.01 && gyro.GetYaw() > -.01)) {waiting = true;}
-//			waiting = false;
-//			pidSmallAngle.Enable();
-//			pidSmallAngle.SetSetpoint(degrees);
-//			return false;
-		//} else {
+//					if (!(pidSmallAngle.IsEnabled())) {
+//						gyro.ZeroYaw();
+//						while(!(gyro.GetYaw() < 0.01 && gyro.GetYaw() > -.01)) {waiting = true;}
+//						waiting = false;
+//						pidSmallAngle.Enable();
+//						pidSmallAngle.SetSetpoint(degrees);
+//						return false;
+//					} else {
 		inTurnDegrees = true;
 		updateDashboard();
 		switch (turnPID) {
@@ -549,10 +596,7 @@ public:
 							pidLargeAngle.SetSetpoint(degrees);
 						break;
 		}
-
-
 		updateDashboard();
-
 		if (pidMediumAngle.IsEnabled() && pidMediumAngle.OnTarget()) {
 			pidMediumAngle.Disable();
 			inTurnDegrees = false;
@@ -584,15 +628,58 @@ public:
 	void TeleopPeriodic() {
 		//Drive(driveMode::ARCADE);
 		Drive(driveMode::TANK);
+		updateCompressor();
 		updateDashboard();
+		switch(pixelPosition){
+			case 0:				// off
+				I2CWrite(111);
+				break;
+			case 1:				// Red
+				I2CWrite(114);
+				break;
+			case 2:				// Green
+				I2CWrite(103);
+				break;
+			case 3:				// Blue
+				I2CWrite(98);
+				break;
+			case 4:				// Rainbow
+				I2CWrite(117);
+				break;
+			case 5:				// Rainbow Cycle
+				I2CWrite(99);
+				break;
+			case 6:				// Chase
+				I2CWrite(104);
+				break;
+			case 7:				// Checkerboard
+				I2CWrite(116);
+				break;
+			case 8:				// Breathe
+				I2CWrite(112);
+				break;
+			case 9:
+				I2CWrite(115);
+				break;
+		}
 	}
 
 	void TestPeriodic() {
 	}
 
+	void UpdateJoystickCodriver() {
+#if defined (JOYSTICK_CODRIVER)
+		coJoyY = joystickCodriver.GetY();
+		clampOpen = joystickCodriver.GetTriggerPressed();
+		topStick = joystickCodriver.GetPOV();
+#elif defined (GUITAR_CODRIVER)
+
+#endif
+
+	}
 
 	void UpdateJoystickArcade() {
-#if defined(JOYSTICK)
+#if defined(JOYSTICK_DRIVER)
 		joyY = joystick1.GetY();
 		joyX = -joystick1.GetX();
 		joyZ = joystick1.GetZ();
@@ -602,10 +689,10 @@ public:
 
 
 	void UpdateJoystickTank() {
-#if defined(JOYSTICK)
+#if defined(JOYSTICK_DRIVER)
 		leftjoyY = joystick1.GetY();
 		rightjoyY = joystick2.GetY();
-#elif defined(XBOX)
+#elif defined(XBOX_DRIVER)
 		//If both triggers pressed
 		if(!(xboxController.GetTriggerAxis(frc::GenericHID::JoystickHand::kRightHand) >0.1)  && !(xboxController.GetTriggerAxis(frc::GenericHID::JoystickHand::kLeftHand))) {
 			//Arcade drive with right stick
@@ -629,15 +716,37 @@ public:
 			leftjoyY = leftjoyY / 3;
 			rightjoyY = rightjoyY / 3;
 		}
-
-
 #endif
 	}
 
 	void Drive(driveMode mode) {
+		UpdateJoystickCodriver();
 
+		//Codriver stuff
+		//Clamp control
+		if (clampOpen) {
+			//Do pneumatics stuff to open clamp
+			intakeSolenoid.Set(DoubleSolenoid::Value::kForward);
+		} else {
+			//Do pneumatics stuff to close clamp
+			intakeSolenoid.Set(DoubleSolenoid::Value::kReverse);
+		}
+
+		//Arm control
+		if (topStick >= 315 || topStick <= 45) {
+			//slow for outtake
+			clampWheelsTarget = 0.3;
+		} else {
+			//fast for intake
+			clampWheelsTarget = 1;
+		}
+
+		//Lift control
+		armTarget = coJoyY;
+
+
+		//If we are in arcade drive
 		if (mode == driveMode::ARCADE) {
-
 			UpdateJoystickArcade();
 			//If Z axis is moved and X and Y are not
 			if (ArcadeDriveDeadband(joyZ) != 0 && TankDriveDeadband(joyY) == 0 && TankDriveDeadband(joyX) == 0) {
@@ -662,6 +771,7 @@ public:
 				rightTarget = TankDriveDeadband(joyY + joyX);
 			}
 		} else {
+			//If we are in tank drive
 			UpdateJoystickTank();
 
 			//If neither triggers are pressed
@@ -699,10 +809,25 @@ public:
 
 		//Left motor move, negative value = forward
 		leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, -leftTarget);
-
 		//Right motor move
 		rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, -rightTarget);
 
+		//Intake Control
+		if(topStick != -1) {
+			intakeLeftMotor.Set(clampWheelsTarget);
+			intakeRightMotor.Set(-clampWheelsTarget);
+		} else {
+			intakeLeftMotor.Set(0);
+			intakeRightMotor.Set(0);
+		}
+
+		//Lift Control
+		if(TankDriveDeadband(armTarget) == 0) {
+			liftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::Position, lastLiftPosition);
+		} else{
+			liftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, armTarget);
+			lastLiftPosition = liftLeader.GetSelectedSensorPosition(Constant::pidChannel);
+		}
 	}
 
 	bool driveDistance(double inches) {
@@ -718,21 +843,21 @@ public:
 			return true;
 		}
 
-//		rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::Follower, Constant::LeftLeaderID);
-//		leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::Position, targetEncPos);
+//					rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::Follower, Constant::LeftLeaderID);
+//					leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::Position, targetEncPos);
 
 		leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::MotionMagic, targetEncPos);
 		rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::MotionMagic, targetEncPos);
 
-//		// Forward = positive encoder position for left
-//		leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::Position, targetEncPos);
-//		// Forward = negative encoder position for right
-//		rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::Position, -targetEncPos);
+//					// Forward = positive encoder position for left
+//					leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::Position, targetEncPos);
+//					// Forward = negative encoder position for right
+//					rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::Position, -targetEncPos);
 
 		return false;
 	}
 
-	void SetupMotor() {
+	void setupMotor() {
 		//Left motor setup
 		leftLeader.ClearStickyFaults(0);
 		leftLeader.ConfigSelectedFeedbackSensor(ctre::phoenix::motorcontrol::FeedbackDevice::QuadEncoder, 0, 0);
@@ -780,43 +905,60 @@ public:
 		rightFollower.SetSensorPhase(false);
 		rightFollower.SetInverted(true);
 
-		// Set Left PID
-		// Values were tested using Web Interface
-//		leftLeader.Config_kP(Constant::pidChannel, .5, 0);
-//		leftLeader.Config_kI(Constant::pidChannel, .009, 0);
-//		leftLeader.Config_kD(Constant::pidChannel, 13, 0);
-//		leftLeader.Config_IntegralZone(Constant::pidChannel, 100, 0);
-//
-//		rightLeader.Config_kP(Constant::pidChannel, .5, 0);
-//		rightLeader.Config_kI(Constant::pidChannel, .009, 0);
-//		rightLeader.Config_kD(Constant::pidChannel, 13, 0);
-//		rightLeader.Config_IntegralZone(Constant::pidChannel, 100, 0);
+		// Lift Setup
+		liftLeader.ClearStickyFaults(0);
+		liftLeader.ConfigSelectedFeedbackSensor(ctre::phoenix::motorcontrol::FeedbackDevice::QuadEncoder, Constant::pidChannel, 0);
+		liftLeader.ConfigNominalOutputForward(0, 0);
+		liftLeader.ConfigNominalOutputReverse(0, 0);
+		liftLeader.ConfigPeakOutputForward(1, 0);
+		liftLeader.ConfigPeakOutputReverse(-1, 0);
+		liftLeader.SetNeutralMode(ctre::phoenix::motorcontrol::NeutralMode::Brake);
+		liftLeader.ConfigMotionCruiseVelocity(Constant::liftMotionVel, 0);
+		liftLeader.ConfigMotionAcceleration(Constant::liftMotionAcc, 0);
+		liftLeader.SetSensorPhase(false);
+		liftLeader.SetInverted(false);
 
-//		leftLeader.Config_kP(Constant::pidChannel, .09, 0);
-//		leftLeader.Config_kI(Constant::pidChannel, 0, 0);
-//		leftLeader.Config_kD(Constant::pidChannel, 0, 0);
-//		leftLeader.Config_IntegralZone(Constant::pidChannel, 0, 0);
-//
-//		rightLeader.Config_kP(Constant::pidChannel, .09, 0);
-//		rightLeader.Config_kI(Constant::pidChannel, 0, 0);
-//		rightLeader.Config_kD(Constant::pidChannel, 0, 0);
-//		rightLeader.Config_IntegralZone(Constant::pidChannel, 0, 0);
+		liftFollower.ConfigNominalOutputForward(0, 0);
+		liftFollower.ConfigNominalOutputReverse(0, 0);
+		liftFollower.ConfigPeakOutputForward(1, 0);
+		liftFollower.ConfigPeakOutputReverse(-1, 0);
+		liftFollower.SetNeutralMode(ctre::phoenix::motorcontrol::NeutralMode::Brake);
+		liftFollower.ConfigMotionCruiseVelocity(Constant::liftMotionVel, 0);
+		liftFollower.ConfigMotionAcceleration(Constant::liftMotionAcc, 0);
+		liftFollower.SetSensorPhase(false);
+
+		// PID Setup
+		leftLeader.Config_kP(Constant::pidChannel, .09, 0);
+		leftLeader.Config_kI(Constant::pidChannel, 0, 0);
+		leftLeader.Config_kD(Constant::pidChannel, 0, 0);
+		leftLeader.Config_IntegralZone(Constant::pidChannel, 0, 0);
+
+		rightLeader.Config_kP(Constant::pidChannel, .09, 0);
+		rightLeader.Config_kI(Constant::pidChannel, 0, 0);
+		rightLeader.Config_kD(Constant::pidChannel, 0, 0);
+		rightLeader.Config_IntegralZone(Constant::pidChannel, 0, 0);
 
 		leftFollower.Set(ctre::phoenix::motorcontrol::ControlMode::Follower, Constant::LeftLeaderID);
 		rightFollower.Set(ctre::phoenix::motorcontrol::ControlMode::Follower, Constant::RightLeaderID);
+		liftFollower.Set(ctre::phoenix::motorcontrol::ControlMode::Follower, Constant::LiftLeaderID);
 	}
 
 	void updateDashboard() {
+		frc::SmartDashboard::PutNumber("POV Codriver", joystickCodriver.GetPOV());
+		frc::SmartDashboard::PutBoolean("Compressor On", compressor.Enabled());
+		frc::SmartDashboard::PutBoolean("Switch Valve", compressor.GetPressureSwitchValue());
+
 		frc::SmartDashboard::PutNumber("Left Enc Pos", leftLeader.GetSelectedSensorPosition(Constant::Constant::pidChannel));
 		frc::SmartDashboard::PutNumber("Left Error", leftLeader.GetClosedLoopError(Constant::pidChannel));
-//		frc::SmartDashboard::PutNumber("Left Target", leftLeader.GetClosedLoopTarget(Constant::pidChannel));
+        //				frc::SmartDashboard::PutNumber("Left Target", leftLeader.GetClosedLoopTarget(Constant::pidChannel));
 		frc::SmartDashboard::PutNumber("Left Enc Vel", leftLeader.GetSelectedSensorVelocity(Constant::pidChannel));
 
 		frc::SmartDashboard::PutNumber("Right Enc Pos", rightLeader.GetSelectedSensorPosition(Constant::pidChannel));
 		frc::SmartDashboard::PutNumber("Right Error", rightLeader.GetClosedLoopError(Constant::pidChannel));
-//		frc::SmartDashboard::PutNumber("Right Target", rightLeader.GetClosedLoopTarget(Constant::pidChannel));
+        //				frc::SmartDashboard::PutNumber("Right Target", rightLeader.GetClosedLoopTarget(Constant::pidChannel));
 		frc::SmartDashboard::PutNumber("Right Enc Vel", rightLeader.GetSelectedSensorVelocity(Constant::pidChannel));
 
+		frc::SmartDashboard::PutNumber("Lift Enc Pos", liftLeader.GetSelectedSensorPosition(Constant::Constant::pidChannel));
 
 		frc::SmartDashboard::PutNumber("Angle", gyro.GetYaw());
 		frc::SmartDashboard::PutBoolean("Waiting to Zero", waiting);
@@ -875,6 +1017,8 @@ public:
 			frc::SmartDashboard::PutNumber("Auton Turn Command", turnVector[traverseStep]);
 		else
 			frc::SmartDashboard::PutNumber("Auton Turn Command", -1);
+
+		frc::SmartDashboard::PutBoolean("Timer Override", timerOverride);
 
 		switch (turnPID) {
 			case SMALL: frc::SmartDashboard::PutBoolean("PIDIsOnTarget", pidSmallAngle.OnTarget());
@@ -935,25 +1079,42 @@ public:
 		}
 	}
 
+	void updateCompressor(void)
+	{
+		// if not enough pressure
+		if(!compressor.GetPressureSwitchValue()) {
+			// Start compressor
+			compressor.Start();
+		}
+		// if enough pressure
+		else {
+			// Stop compressor
+			compressor.Stop();
+		}
+	} // END of UpdateCompressor() function
+
 	bool AutonPositionDeadband(double value, int target) {
-		if (fabs(target - value) < Constant::autonPositionDeadbandVal)
+		if (fabs(target - value) < Constant::autonPositionDeadbandVal) {
 			return true;
-		else
+		} else {
 			return false;
+		}
 	}
 
 	double TankDriveDeadband(double value) {
-		if (value <= Constant::tankDriveDeadbandVal && value >= -Constant::tankDriveDeadbandVal)
+		if (value <= Constant::tankDriveDeadbandVal && value >= -Constant::tankDriveDeadbandVal) {
 			return 0;
-		else
+		} else {
 			return value;
+		}
 	}
 
 	double ArcadeDriveDeadband(double value) {
-		if (value <= Constant::arcadeDriveDeadbandVal && value >= -Constant::arcadeDriveDeadbandVal)
+		if (value <= Constant::arcadeDriveDeadbandVal && value >= -Constant::arcadeDriveDeadbandVal) {
 			return 0;
-		else
+		} else {
 			return value;
+		}
 	}
 
 private:
@@ -971,38 +1132,64 @@ private:
 	bool scaleDone = false;
 	bool noDrop = false;
 
+	I2C *I2Channel;
+	int pixelPosition = 0;
+
+	Timer timer;
+	double secondsElapsed = 0;
+	bool timerOverride = false;
+
 	TalonSRX leftLeader { Constant::LeftLeaderID };
 	TalonSRX leftFollower { Constant::LeftFollowerID };
 	TalonSRX rightLeader { Constant::RightLeaderID };
 	TalonSRX rightFollower { Constant::RightFollowerID };
-#if defined(JOYSTICK)
+
+	TalonSRX liftLeader{Constant::LiftLeaderID};
+	TalonSRX liftFollower{Constant::LiftFollowerID};
+	double lastLiftPosition;
+	frc::DoubleSolenoid intakeSolenoid {Constant::PCM_ID, Constant::PCM_CHANNEL_CLAMP, Constant::PCM_CHANNEL_RELEASE};
+	frc::Compressor compressor{Constant::PCM_ID};
+
+	VictorSP intakeLeftMotor{Constant::IntakeLeftPWM};
+	VictorSP intakeRightMotor{Constant::IntakeRightPWM};
+
+#if defined(JOYSTICK_DRIVER)
 	Joystick joystick1 { 0 };		    // Arcade and Left Tank
 	Joystick joystick2 { 1 };			// Right Tank
 #endif
 	PIDMotorOutput pidMotorOutput { &leftLeader, &rightLeader };
 	PIDGyroSource pidGyroSource { &gyro };
 	PIDController pidSmallAngle { .0125, 0, 0.01, &pidGyroSource, &pidMotorOutput, 0.02 };  //trying for 45 degrees
-//	PIDController pidSmallAngle { .00822, 0, 0, &pidGyroSource, &pidMotorOutput, 0.02 };
+    //	    PIDController pidSmallAngle { .00822, 0, 0, &pidGyroSource, &pidMotorOutput, 0.02 };
 	PIDController pidMediumAngle { .01094, 0, 0.01, &pidGyroSource, &pidMotorOutput, 0.02 }; //trying for 90 degrees
 	PIDController pidLargeAngle { .004, 0, 0.02, &pidGyroSource, &pidMotorOutput, 0.02 }; //trying for 135 degrees
-	//PIDController pidController { .00602, 0, 0, &pidGyroSource, &pidMotorOutput, 0.02 };
-
+	//      PIDController pidController { .00602, 0, 0, &pidGyroSource, &pidMotorOutput, 0.02 };
+#if defined(JOYSTICK_CODRIVER)
+	Joystick joystickCodriver { 1 };
+#elif defined(GUITAR_CODRIVER)
+	XboxController guitar { 1 };
+#endif
+	double armTarget;
+	bool clampOpen;
+	double coJoyY;
 	double joyX;
 	double joyY;
 	double joyZ;
 	double leftjoyY;
 	double rightjoyY;
 	double rightjoyX;
-#if defined(XBOX)
+#if defined(XBOX_DRIVER)
 	XboxController xboxController{0};
 #endif
+	int topStick;
+	double clampWheelsTarget;
 	double leftTarget;
 	double rightTarget;
 	double targetEncPos;
 	bool waiting;
 	bool inTurnDegrees = false;
 	unsigned int traverseStep = 0;
-	int turnPID = MEDIUM;
+	angleMode turnPID = MEDIUM;
 	AHRS gyro { I2C::Port::kMXP };
 
 	ctre::phoenix::motorcontrol::StickyFaults leftFaults;

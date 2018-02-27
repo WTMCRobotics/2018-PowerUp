@@ -19,6 +19,16 @@ public:
 	static const int RightLeaderID = 14;
 	static const int RightFollowerID = 13;
 
+	static const int LiftLeaderID = 15;
+	static const int LiftFollowerID = 16;
+
+	static const int IntakeLeftPWM = 0;
+	static const int IntakeRightPWM = 1;
+
+	static const int PCM_ID = 0;
+	static const int PCM_CHANNEL_CLAMP = 0;
+	static const int PCM_CHANNEL_RELEASE = 0;
+
 	static constexpr double pulsesPerRotationQuad = 2048 * 4;
 	static constexpr double circumference = 6 * 3.14;
 
@@ -33,6 +43,9 @@ public:
 
 	static constexpr double rightMotionVel = 5150;
 	static constexpr double rightMotionAcc = 5150 / 2;
+
+	static constexpr double liftMotionVel = 0;
+	static constexpr double liftMotionAcc = 0;
 };
 
 
