@@ -23,6 +23,8 @@
 #include "PIDGyroSource.h"
 #include "PIDController.h"
 #include <SerialPort.h>
+#include <AnalogInput.h>
+#include <Ultrasonic.h>
 #include <DoubleSolenoid.h>
 #include <Compressor.h>
 #include <Timer.h>
@@ -88,6 +90,8 @@ public:
 		gyro.ZeroYaw();
 		while(!(gyro.GetYaw() < 0.01 && gyro.GetYaw() > -.01)) {waiting = true;}
 		waiting = false;
+//		ultrasonicSensor.SetAutomaticMode(true);
+//		ultrasonicSensor.SetEnabled(true);
 
 		secondsElapsed = 0;
 		timerOverride = false;
@@ -464,6 +468,8 @@ public:
 		while(!(gyro.GetYaw() < 0.01 && gyro.GetYaw() > -.01)) {waiting = true;}
 		waiting = false;
 
+//		ultrasonicSensor.SetAutomaticMode(true);
+//		ultrasonicSensor.SetEnabled(true);
 		updateDashboard();
 	}
 
@@ -518,24 +524,6 @@ public:
 				}
 				break;
 
-				//				switch (traverseStep) {
-				//				case 0:
-				//					if (turnDegrees(90))
-				//					{
-				//						traverseStep++;
-				//						gyro.ZeroYaw();
-				//						while(!(gyro.GetYaw() < 0.01 && gyro.GetYaw() > -.01))
-				//							{waiting = true; updateDashboard();}
-				//						waiting = false;
-				//					}
-				//					break;
-				//				case 1:
-				//					std::cout << "traverseStep is 1\n";
-				//					if(turnDegrees(-90))
-				//						{autonState = WAIT;}
-				//					break;
-				//				}
-				//				break;
 			case NEXT:
 				for(unsigned int i = 0; i < moveVector.size(); i++)
 				{
@@ -630,6 +618,7 @@ public:
 		Drive(driveMode::TANK);
 		updateCompressor();
 		updateDashboard();
+
 		switch(pixelPosition){
 			case 0:				// off
 				I2CWrite(111);
@@ -672,6 +661,8 @@ public:
 		coJoyY = joystickCodriver.GetY();
 		clampOpen = joystickCodriver.GetTriggerPressed();
 		topStick = joystickCodriver.GetPOV();
+		tempButton = joystickCodriver.GetRawButton(5);
+
 #elif defined (GUITAR_CODRIVER)
 
 #endif
@@ -732,7 +723,7 @@ public:
 			intakeSolenoid.Set(DoubleSolenoid::Value::kReverse);
 		}
 
-		//Arm control
+		//Intake control
 		if (topStick >= 315 || topStick <= 45) {
 			//slow for outtake
 			clampWheelsTarget = 0.3;
@@ -824,7 +815,11 @@ public:
 		//Lift Control
 		if(TankDriveDeadband(armTarget) == 0) {
 			liftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::Position, lastLiftPosition);
-		} else{
+		}else if(tempButton)
+		{
+			liftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::Position, 1024 * 4);
+		}
+		else{
 			liftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, armTarget);
 			lastLiftPosition = liftLeader.GetSelectedSensorPosition(Constant::pidChannel);
 		}
@@ -913,8 +908,6 @@ public:
 		liftLeader.ConfigPeakOutputForward(1, 0);
 		liftLeader.ConfigPeakOutputReverse(-1, 0);
 		liftLeader.SetNeutralMode(ctre::phoenix::motorcontrol::NeutralMode::Brake);
-		liftLeader.ConfigMotionCruiseVelocity(Constant::liftMotionVel, 0);
-		liftLeader.ConfigMotionAcceleration(Constant::liftMotionAcc, 0);
 		liftLeader.SetSensorPhase(false);
 		liftLeader.SetInverted(false);
 
@@ -923,9 +916,8 @@ public:
 		liftFollower.ConfigPeakOutputForward(1, 0);
 		liftFollower.ConfigPeakOutputReverse(-1, 0);
 		liftFollower.SetNeutralMode(ctre::phoenix::motorcontrol::NeutralMode::Brake);
-		liftFollower.ConfigMotionCruiseVelocity(Constant::liftMotionVel, 0);
-		liftFollower.ConfigMotionAcceleration(Constant::liftMotionAcc, 0);
 		liftFollower.SetSensorPhase(false);
+		liftFollower.SetInverted(true);
 
 		// PID Setup
 		leftLeader.Config_kP(Constant::pidChannel, .09, 0);
@@ -937,6 +929,11 @@ public:
 		rightLeader.Config_kI(Constant::pidChannel, 0, 0);
 		rightLeader.Config_kD(Constant::pidChannel, 0, 0);
 		rightLeader.Config_IntegralZone(Constant::pidChannel, 0, 0);
+
+		liftLeader.Config_kP(Constant::pidChannel, .1, 0);
+		liftLeader.Config_kI(Constant::pidChannel, 0, 0);
+		liftLeader.Config_kD(Constant::pidChannel, 0, 0);
+		liftLeader.Config_IntegralZone(Constant::pidChannel, 0, 0);
 
 		leftFollower.Set(ctre::phoenix::motorcontrol::ControlMode::Follower, Constant::LeftLeaderID);
 		rightFollower.Set(ctre::phoenix::motorcontrol::ControlMode::Follower, Constant::RightLeaderID);
@@ -959,6 +956,9 @@ public:
 		frc::SmartDashboard::PutNumber("Right Enc Vel", rightLeader.GetSelectedSensorVelocity(Constant::pidChannel));
 
 		frc::SmartDashboard::PutNumber("Lift Enc Pos", liftLeader.GetSelectedSensorPosition(Constant::Constant::pidChannel));
+		frc::SmartDashboard::PutNumber("Lift Enc Err", liftLeader.GetClosedLoopError(Constant::pidChannel));
+		frc::SmartDashboard::PutNumber("Last Lift Position", lastLiftPosition);
+		frc::SmartDashboard::PutBoolean("Temp Button", tempButton);
 
 		frc::SmartDashboard::PutNumber("Angle", gyro.GetYaw());
 		frc::SmartDashboard::PutBoolean("Waiting to Zero", waiting);
@@ -1077,6 +1077,14 @@ public:
 			frc::SmartDashboard::PutNumber("I Gain", -1);
 			frc::SmartDashboard::PutNumber("D Gain", -1);
 		}
+
+		frc::SmartDashboard::PutNumber("Cube Sensor Value", cubeSensor.GetValue());
+		frc::SmartDashboard::PutNumber("Cube Sensor Voltage", cubeSensor.GetVoltage());
+
+//		frc::SmartDashboard::PutBoolean("Ultrasonic Enabled", ultrasonicSensor.IsEnabled());
+//		frc::SmartDashboard::PutNumber("Ultrasonic", ultrasonicSensor.GetRangeInches());
+
+		frc::SmartDashboard::PutBoolean("Beam Break", beamBreakSensor.Get());
 	}
 
 	void updateCompressor(void)
@@ -1192,6 +1200,10 @@ private:
 	angleMode turnPID = MEDIUM;
 	AHRS gyro { I2C::Port::kMXP };
 
+	AnalogInput cubeSensor{0};
+	// Ultrasonic ultrasonicSensor{2, 2, Ultrasonic::kInches};
+	DigitalInput beamBreakSensor{2};
+	bool tempButton;
 	ctre::phoenix::motorcontrol::StickyFaults leftFaults;
 	ctre::phoenix::motorcontrol::StickyFaults rightFaults;
 
