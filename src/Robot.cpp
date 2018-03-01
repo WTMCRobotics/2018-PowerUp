@@ -45,7 +45,7 @@ enum driveMode {
 	ARCADE, TANK
 };
 enum autonStates {
-	START, TRAVERSE, DROP, TO_CUBE_INIT, TO_CUBE_TRAVERSE, TO_SCALE_INIT, TO_SCALE_TRAVERSE, DROP_SECOND, WAIT
+	START, TRAVERSE, DROP, TO_CUBE_INIT, TO_CUBE_TRAVERSE, TO_SCALE_INIT, TO_SCALE_TRAVERSE, DROP_SECOND, WAIT, FINISHED
 } autonState;
 
 enum traverseStates {
@@ -488,10 +488,19 @@ public:
 				case WAIT:
 					intakeLeftMotor.Set(0);
 					intakeRightMotor.Set(0);
+
 					clampControl(false);
 					if(driveDistance(-12)){
 						moveLift(0);
 					}
+					break;
+				case FINISHED:
+					leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
+					rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
+					liftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
+
+					intakeLeftMotor.Set(0);
+					intakeRightMotor.Set(0);
 					break;
 			}
 		}
@@ -521,8 +530,6 @@ public:
 
 		gyro.Reset();
 		gyro.ZeroYaw();
-		while(!(gyro.GetYaw() < 0.01 && gyro.GetYaw() > -.01)) {waiting = true;}
-		waiting = false;
 
 //		ultrasonicSensor.SetAutomaticMode(true);
 //		ultrasonicSensor.SetEnabled(true);
@@ -598,7 +605,9 @@ public:
 					leftLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
 					rightLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
 					traverseStep++;
-					if(!noDrop && traverseStep == moveVector.size() - 1) {
+					if(!noDrop && traverseStep == moveVector.size() - 1 && !pickUp) {
+						traverseState = LIFT;
+					} else if(!noDrop && traverseStep == 1 && pickUp) {
 						traverseState = LIFT;
 					}
 					else {
@@ -623,13 +632,13 @@ public:
 				}
 				break;
 			case LIFT:
-					if(moveLift(liftCommand)) {
-						if(pickUp){
-							traverseState = PICK_UP;
-						} else {
-							traverseState = MOVE;
-						}
+				if(moveLift(liftCommand)) {
+					if(pickUp){
+						traverseState = PICK_UP;
+					} else {
+						traverseState = MOVE;
 					}
+				}
 				break;
 			case PICK_UP:
 				clampControl(true);			// Simulate pressing trigger; Open
@@ -898,7 +907,7 @@ public:
 	}
 
 	void clampControl(bool trigger) {
-		if (clampOpen) {
+		if (trigger) {
 			//Do pneumatics stuff to open clamp
 			intakeSolenoid.Set(DoubleSolenoid::Value::kForward);
 		} else {
@@ -1088,6 +1097,8 @@ public:
 			case WAIT:
 				frc::SmartDashboard::PutString("Auton State", "Wait");
 				break;
+			case FINISHED:
+				frc::SmartDashboard::PutString("Auton State", "Finished");
 		}
 
 		switch (traverseState) {
