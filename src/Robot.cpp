@@ -49,20 +49,22 @@ enum autonStates {
 } autonState;
 
 enum traverseStates {
-	MOVE, TURN, NEXT, DONE
+	MOVE, TURN, NEXT, LIFT, PICK_UP, DONE
 } traverseState;
 
 class Robot: public frc::TimedRobot {
 public:
 	void RobotInit() {
-
 		setupMotor();
 		// Auton Chooser
 		m_chooser.AddDefault(autoDefault, autoDefault);
 		m_chooser.AddObject(autoMiddle, autoMiddle);
 		m_chooser.AddObject(autoLeft, autoLeft);
 		m_chooser.AddObject(autoRight, autoRight);
+		m_chooser.AddObject(liftMoveAuto, liftMoveAuto);
 		frc::SmartDashboard::PutData("Auto Modes", &m_chooser);
+
+		frc::CameraServer::GetInstance()->StartAutomaticCapture("Camera", 0);
 
 		I2Channel = new I2C(I2C::kOnboard, I2C_SLAVE_ADR);
 
@@ -82,6 +84,7 @@ public:
 
 		scaleDone = false;
 		noDrop = false;
+		pickUp = false;
 
 		turnPID = SMALL;
 
@@ -172,6 +175,8 @@ public:
 
 				moveVector.push_back(34.065);
 				turnVector.push_back(181);			// Don't turn
+
+				liftCommand = 24;					// 24"
 			} // END of if switch is on the left
 			  // else if the switch is on the right
 			else if(colorSides[0] == 'R') {
@@ -185,6 +190,8 @@ public:
 
 				moveVector.push_back(39.315);
 				turnVector.push_back(181);			// Don't turn
+
+				liftCommand = 24;
 			} // END of else the switch is on the right
 			else
 			{
@@ -200,6 +207,8 @@ public:
 				turnVector.push_back(90);
 				moveVector.push_back(18.905);
 				turnVector.push_back(181);
+
+				liftCommand = 18;
 			}
 			else if(colorSides[1] == 'L') {
 
@@ -209,6 +218,8 @@ public:
 				moveVector.push_back(15.427);
 				turnVector.push_back(181); // Don't turn
 
+				liftCommand = 78;
+
 				scaleDone = true;
 			}
 			else
@@ -217,6 +228,7 @@ public:
 				moveVector.push_back(130);
 				turnVector.push_back(181);
 
+				liftCommand = 0;
 				noDrop = true;
 			}
 		}
@@ -229,6 +241,8 @@ public:
 				turnVector.push_back(-90);
 				moveVector.push_back(18.905);
 				turnVector.push_back(181);
+
+				liftCommand = 24;
 			}
 			else if(colorSides[1] == 'R') {
 
@@ -238,6 +252,8 @@ public:
 				moveVector.push_back(15.427);
 				turnVector.push_back(181); // Don't turn
 
+				liftCommand = 78;
+
 				scaleDone = true;
 			}
 			else
@@ -245,6 +261,8 @@ public:
 				// Cross Line
 				moveVector.push_back(130);
 				turnVector.push_back(181);
+
+				liftCommand = 0;
 
 				noDrop = true;
 			}
@@ -262,15 +280,19 @@ public:
 			moveVector.push_back(5);
 			turnVector.push_back(181);
 
-
+			liftCommand = 0;
 			//moveVector.push_back(150);
 			//turnVector.push_back(0);
 
 			noDrop = true;
-		} else {
+		} else if (m_autoSelected == liftMoveAuto) {
+			moveLift(24);
+		}
+		else {
 			moveVector.push_back(130);
 			turnVector.push_back(0);
 
+			liftCommand = 0;
 			noDrop = true;
 		} // END of switch that outlines traverse path
 
@@ -298,146 +320,180 @@ public:
 		liftLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
 
 		gyro.ZeroYaw();
+		pickUp = false;
+
 		//pidMediumAngle.SetPID(0.1, 0.0, 0.0);
 		updateDashboard();
 	} // END of AutonomousInit()
 
 	void AutonomousPeriodic() {
 		updateCompressor();
-		switch (autonState) {
-			case START:
-				// Stop Motors
-				leftLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
-				rightLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
+		if(m_autoSelected != liftMoveAuto)
+		{
+			switch (autonState) {
+				case START:
+					// Stop Motors
+					leftLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
+					rightLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
 
-				// Move to traverse and start traverse at the beginning
-				autonState = TRAVERSE;
-				traverseState = MOVE;
-				// Set the traverse step to 0
-				traverseStep = 0;
-
-				switch (turnPID) {
-					case SMALL: if (pidSmallAngle.IsEnabled()) {
-									pidSmallAngle.Disable();
-								} break;
-				   case MEDIUM: if (pidMediumAngle.IsEnabled()) {
-									pidMediumAngle.Disable();
-								} break;
-					case LARGE: if (pidLargeAngle.IsEnabled()) {
-									pidLargeAngle.Disable();
-								} break;
-				} break;
-			case TRAVERSE:
-				updateDashboard();
-				traverse();
-				// if traverse is DONE
-				if (traverseState == DONE) {
-					// if auto selected is default
-					if (noDrop) {
-						// Skip drop
-						autonState = WAIT;
-					}
-					// else not default auton
-					else {
-						// Move to drop
-						autonState = DROP;
-					}
-					leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
-					rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
-
-					moveVector.clear();
-					turnVector.clear();
-
-
-				} // END of if traverse is DONE
-				break;
-			case DROP:
-				traverseState = MOVE;
-				autonState = TO_CUBE_INIT;
-				break;
-			case TO_CUBE_INIT:
-				if(!scaleDone && colorSides[1] == 'L' && m_autoSelected == autoLeft)
-				{
-					moveVector.push_back(-8.595);
-					turnVector.push_back(0);
-					moveVector.push_back(69);
-					turnVector.push_back(135);
-					moveVector.push_back(20.193);
-					turnVector.push_back(181);		// Don't turn
-				}
-				else if(!scaleDone && colorSides[1] == 'R' && m_autoSelected == autoRight)
-				{
-					moveVector.push_back(-8.595);
-					turnVector.push_back(0);
-					moveVector.push_back(69);
-					turnVector.push_back(-135);
-					moveVector.push_back(20.193);
-					turnVector.push_back(181);		// Don't turn
-				}
-
-				autonState = TO_CUBE_TRAVERSE;
-				break;
-			case TO_CUBE_TRAVERSE:
-				updateDashboard();
-				if(moveVector.empty())
-				{
-					autonState = WAIT;
-					break;
-				}
-				traverse();
-				// if traverse is DONE
-				if (traverseState == DONE) {
-					// Move to drop
-					autonState = TO_SCALE_INIT;
-
-					leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
-					rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
-					moveVector.clear();
-					turnVector.clear();
-
+					// Move to traverse and start traverse at the beginning
+					autonState = TRAVERSE;
 					traverseState = MOVE;
-				} // END of if traverse is DONE
-				break;
-			case TO_SCALE_INIT:
-				if(m_autoSelected == autoLeft)
-				{
-					moveVector.push_back(-54.368);
-					turnVector.push_back(45);
-					moveVector.push_back(35.021);
-					turnVector.push_back(181);		// Don't turn
-				}
-				else if(m_autoSelected == autoRight)
-				{
-					moveVector.push_back(-54.368);
-					turnVector.push_back(-45);
-					moveVector.push_back(35.021);
-					turnVector.push_back(181);		// Don't turn
-				}
-				break;
-			case TO_SCALE_TRAVERSE:
-				updateDashboard();
-				if(moveVector.empty())
-				{
-					autonState = WAIT;
-					break;
-				}
-				traverse();
-				// if traverse is DONE
-				if (traverseState == DONE) {
-					// Move to drop
-					autonState = DROP_SECOND;
+					// Set the traverse step to 0
+					traverseStep = 0;
 
-					leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
-					rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
-					moveVector.clear();
-					turnVector.clear();
-				} // END of if traverse is DONE
-				break;
-			case DROP_SECOND:
-				traverseState = MOVE;
-				break;
-			case WAIT:
-				break;
+					switch (turnPID) {
+						case SMALL: if (pidSmallAngle.IsEnabled()) {
+										pidSmallAngle.Disable();
+									} break;
+					   case MEDIUM: if (pidMediumAngle.IsEnabled()) {
+										pidMediumAngle.Disable();
+									} break;
+						case LARGE: if (pidLargeAngle.IsEnabled()) {
+										pidLargeAngle.Disable();
+									} break;
+					} break;
+				case TRAVERSE:
+					updateDashboard();
+					traverse();
+					// if traverse is DONE
+					if (traverseState == DONE) {
+						// if auto selected is default
+						if (noDrop) {
+							// Skip drop
+							autonState = WAIT;
+						}
+						// else not default auton
+						else {
+							// Move to drop
+							autonState = DROP;
+						}
+						leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
+						rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
+
+						moveVector.clear();
+						turnVector.clear();
+
+
+					} // END of if traverse is DONE
+					break;
+				case DROP:
+					traverseState = MOVE;
+					intakeLeftMotor.Set(0.3);
+					intakeRightMotor.Set(-0.3);
+
+					clampControl(true);			// Simulate pressing trigger; Open
+					autonState = TO_CUBE_INIT;
+					break;
+				case TO_CUBE_INIT:
+					intakeLeftMotor.Set(0);
+					intakeRightMotor.Set(0);
+					clampControl(false);
+
+					if(!scaleDone && colorSides[1] == 'L' && m_autoSelected == autoLeft)
+					{
+						moveVector.push_back(-8.595);
+						turnVector.push_back(0);
+						moveVector.push_back(69);
+						turnVector.push_back(135);
+						moveVector.push_back(20.193);
+						turnVector.push_back(181);		// Don't turn
+
+						pickUp = true;
+						liftCommand = 0;
+					}
+					else if(!scaleDone && colorSides[1] == 'R' && m_autoSelected == autoRight)
+					{
+						moveVector.push_back(-8.595);
+						turnVector.push_back(0);
+						moveVector.push_back(69);
+						turnVector.push_back(-135);
+						moveVector.push_back(20.193);
+						turnVector.push_back(181);		// Don't turn
+						pickUp = true;
+						liftCommand = 0;
+					}
+
+					autonState = TO_CUBE_TRAVERSE;
+					break;
+				case TO_CUBE_TRAVERSE:
+					updateDashboard();
+					if(moveVector.empty())
+					{
+						autonState = WAIT;
+						break;
+					}
+					traverse();
+					// if traverse is DONE
+					if (traverseState == DONE) {
+						// Move to drop
+						autonState = TO_SCALE_INIT;
+
+						leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
+						rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
+						moveVector.clear();
+						turnVector.clear();
+
+						traverseState = MOVE;
+					} // END of if traverse is DONE
+					break;
+				case TO_SCALE_INIT:
+					pickUp = false;
+					if(m_autoSelected == autoLeft)
+					{
+						moveVector.push_back(-54.368);
+						turnVector.push_back(45);
+						moveVector.push_back(35.021);
+						turnVector.push_back(181);		// Don't turn
+
+						liftCommand = 78;
+					}
+					else if(m_autoSelected == autoRight)
+					{
+						moveVector.push_back(-54.368);
+						turnVector.push_back(-45);
+						moveVector.push_back(35.021);
+						turnVector.push_back(181);		// Don't turn
+
+						liftCommand = 78;
+					}
+					break;
+				case TO_SCALE_TRAVERSE:
+					updateDashboard();
+					if(moveVector.empty())
+					{
+						autonState = WAIT;
+						break;
+					}
+					traverse();
+					// if traverse is DONE
+					if (traverseState == DONE) {
+						// Move to drop
+						autonState = DROP_SECOND;
+
+						leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
+						rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
+						moveVector.clear();
+						turnVector.clear();
+					} // END of if traverse is DONE
+					break;
+				case DROP_SECOND:
+					intakeLeftMotor.Set(0.3);
+					intakeRightMotor.Set(-0.3);
+
+					clampControl(true);			// Simulate pressing trigger; Open
+					autonState = TO_CUBE_INIT;
+					traverseState = MOVE;
+					break;
+				case WAIT:
+					intakeLeftMotor.Set(0);
+					intakeRightMotor.Set(0);
+					clampControl(false);
+					if(driveDistance(-12)){
+						moveLift(0);
+					}
+					break;
+			}
 		}
 		updateDashboard();
 	} // END of AutonomousPeriodic()
@@ -477,6 +533,11 @@ public:
 		updateDashboard();
 		switch (traverseState) {
 			case MOVE:
+				if(CubeSensorDeadband(cubeSensor.GetValue())) {
+					intakeLeftMotor.Set(0);
+					intakeRightMotor.Set(0);
+					clampControl(false);
+				}
 				if (moveVector[traverseStep] == 0 || driveDistance(moveVector[traverseStep])) {
 					traverseState = TURN;
 					updateDashboard();
@@ -537,10 +598,16 @@ public:
 					leftLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
 					rightLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
 					traverseStep++;
-					traverseState = MOVE;
+					if(!noDrop && traverseStep == moveVector.size() - 1) {
+						traverseState = LIFT;
+					}
+					else {
+						traverseState = MOVE;
+					}
 				} else {
 					leftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
 					rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
+					liftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
 					leftLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
 					rightLeader.SetSelectedSensorPosition(0, Constant::pidChannel, 0);
 					if (pidSmallAngle.IsEnabled()) {
@@ -554,6 +621,21 @@ public:
 					}
 					traverseState = DONE;
 				}
+				break;
+			case LIFT:
+					if(moveLift(liftCommand)) {
+						if(pickUp){
+							traverseState = PICK_UP;
+						} else {
+							traverseState = MOVE;
+						}
+					}
+				break;
+			case PICK_UP:
+				clampControl(true);			// Simulate pressing trigger; Open
+				intakeLeftMotor.Set(-1);
+				intakeRightMotor.Set(1);
+				traverseState = MOVE;
 				break;
 			case DONE:
 				break;
@@ -661,7 +743,6 @@ public:
 		coJoyY = joystickCodriver.GetY();
 		clampOpen = joystickCodriver.GetTriggerPressed();
 		topStick = joystickCodriver.GetPOV();
-		tempButton = joystickCodriver.GetRawButton(5);
 
 #elif defined (GUITAR_CODRIVER)
 
@@ -715,13 +796,7 @@ public:
 
 		//Codriver stuff
 		//Clamp control
-		if (clampOpen) {
-			//Do pneumatics stuff to open clamp
-			intakeSolenoid.Set(DoubleSolenoid::Value::kForward);
-		} else {
-			//Do pneumatics stuff to close clamp
-			intakeSolenoid.Set(DoubleSolenoid::Value::kReverse);
-		}
+		clampControl(clampOpen);
 
 		//Intake control
 		if (topStick >= 315 || topStick <= 45) {
@@ -729,7 +804,7 @@ public:
 			clampWheelsTarget = 0.3;
 		} else {
 			//fast for intake
-			clampWheelsTarget = 1;
+			clampWheelsTarget = -1;
 		}
 
 		//Lift control
@@ -815,13 +890,20 @@ public:
 		//Lift Control
 		if(TankDriveDeadband(armTarget) == 0) {
 			liftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::Position, lastLiftPosition);
-		}else if(tempButton)
-		{
-			liftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::Position, 1024 * 4);
 		}
 		else{
 			liftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, armTarget);
 			lastLiftPosition = liftLeader.GetSelectedSensorPosition(Constant::pidChannel);
+		}
+	}
+
+	void clampControl(bool trigger) {
+		if (clampOpen) {
+			//Do pneumatics stuff to open clamp
+			intakeSolenoid.Set(DoubleSolenoid::Value::kForward);
+		} else {
+			//Do pneumatics stuff to close clamp
+			intakeSolenoid.Set(DoubleSolenoid::Value::kReverse);
 		}
 	}
 
@@ -849,6 +931,22 @@ public:
 //					// Forward = negative encoder position for right
 //					rightLeader.Set(ctre::phoenix::motorcontrol::ControlMode::Position, -targetEncPos);
 
+		return false;
+	}
+
+	bool moveLift(double inches) {
+		updateDashboard();
+		// inches / circumference = number of rotations
+		// * pulsesPerRotationQuad = number of pulses in one rotation
+		// targetEncPos = position encoder should read
+		targetEncPos = (inches / Constant::liftCircumference) * Constant::pulsesPerRotationLift;
+
+		if (AutonPositionDeadband(liftLeader.GetSelectedSensorPosition(Constant::pidChannel), targetEncPos)) {
+			liftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::PercentOutput, 0);
+			return true;
+		}
+
+		liftLeader.Set(ctre::phoenix::motorcontrol::ControlMode::Position, targetEncPos);
 		return false;
 	}
 
@@ -958,7 +1056,6 @@ public:
 		frc::SmartDashboard::PutNumber("Lift Enc Pos", liftLeader.GetSelectedSensorPosition(Constant::Constant::pidChannel));
 		frc::SmartDashboard::PutNumber("Lift Enc Err", liftLeader.GetClosedLoopError(Constant::pidChannel));
 		frc::SmartDashboard::PutNumber("Last Lift Position", lastLiftPosition);
-		frc::SmartDashboard::PutBoolean("Temp Button", tempButton);
 
 		frc::SmartDashboard::PutNumber("Angle", gyro.GetYaw());
 		frc::SmartDashboard::PutBoolean("Waiting to Zero", waiting);
@@ -1002,6 +1099,12 @@ public:
 				break;
 			case NEXT:
 				frc::SmartDashboard::PutString("Traverse State", "Next");
+				break;
+			case LIFT:
+				frc::SmartDashboard::PutString("Traverse State", "Lift");
+				break;
+			case PICK_UP:
+				frc::SmartDashboard::PutString("Traverse State", "Pick Up");
 				break;
 			case DONE:
 				frc::SmartDashboard::PutString("Traverse State", "Done");
@@ -1101,6 +1204,14 @@ public:
 		}
 	} // END of UpdateCompressor() function
 
+	bool CubeSensorDeadband(double sensorValue) {
+		if(sensorValue > Constant::haveCubeVal) {
+			return true;
+		} else {
+			return false;
+		}
+	}
+
 	bool AutonPositionDeadband(double value, int target) {
 		if (fabs(target - value) < Constant::autonPositionDeadbandVal) {
 			return true;
@@ -1132,6 +1243,7 @@ private:
 	const std::string autoMiddle = "Middle";
 	const std::string autoLeft = "Left";
 	const std::string autoRight = "Right";
+	const std::string liftMoveAuto = "Lift Test";
 	std::string m_autoSelected;
 
 	std::vector<double> moveVector;
@@ -1139,6 +1251,8 @@ private:
 
 	bool scaleDone = false;
 	bool noDrop = false;
+	bool pickUp = false;
+	double liftCommand;
 
 	I2C *I2Channel;
 	int pixelPosition = 0;
@@ -1203,7 +1317,6 @@ private:
 	AnalogInput cubeSensor{0};
 	// Ultrasonic ultrasonicSensor{2, 2, Ultrasonic::kInches};
 	DigitalInput beamBreakSensor{2};
-	bool tempButton;
 	ctre::phoenix::motorcontrol::StickyFaults leftFaults;
 	ctre::phoenix::motorcontrol::StickyFaults rightFaults;
 

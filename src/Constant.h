@@ -30,7 +30,13 @@ public:
 	static const int PCM_CHANNEL_RELEASE = 0;
 
 	static constexpr double pulsesPerRotationQuad = 2048 * 4;
+	static constexpr double pulsesPerRotationLift = 1024 * 4;
+
+	static const int haveCubeVal = 4000;
+
+
 	static constexpr double circumference = 6 * 3.14;
+	static constexpr double liftCircumference = 6 * 3.14;
 
 	static constexpr double tankDriveDeadbandVal = .15;
 	static constexpr double arcadeDriveDeadbandVal = .2;
@@ -43,9 +49,6 @@ public:
 
 	static constexpr double rightMotionVel = 5150;
 	static constexpr double rightMotionAcc = 5150 / 2;
-
-	static constexpr double liftMotionVel = 0;
-	static constexpr double liftMotionAcc = 0;
 };
 
 
